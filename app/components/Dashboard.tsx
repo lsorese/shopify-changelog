@@ -565,15 +565,9 @@ function RecentPanel({ entries }: { entries: Entry[] }) {
   const recent = useMemo(() => {
     const cutoff = new Date();
     cutoff.setHours(cutoff.getHours() - 72);
-    const cutoffStr = cutoff.toISOString();
-    // Use updated_at if available (means it was added/updated recently by a scrape),
-    // otherwise fall back to the entry's published date
-    return entries.filter((e) => {
-      const ts = (e as Entry & { updated_at?: string; created_at?: string }).updated_at
-        || (e as Entry & { created_at?: string }).created_at
-        || e.date + "T00:00:00Z";
-      return ts >= cutoffStr;
-    });
+    const cutoffDate = cutoff.toISOString().slice(0, 10);
+    // Filter by Shopify's published date — what was actually posted in the last 72h
+    return entries.filter((e) => e.date >= cutoffDate);
   }, [entries]);
 
   return (
@@ -674,17 +668,12 @@ export default function Dashboard() {
 
   const actionRequiredCount = entries.filter((e) => e.has_action_required).length;
 
-  const recentCutoff = useMemo(() => {
-    const d = new Date();
-    d.setHours(d.getHours() - 72);
-    return d.toISOString();
-  }, []);
-  const recentCount = entries.filter((e) => {
-    const ts = (e as Entry & { updated_at?: string; created_at?: string }).updated_at
-      || (e as Entry & { created_at?: string }).created_at
-      || e.date + "T00:00:00Z";
-    return ts >= recentCutoff;
-  }).length;
+  const recentCount = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - 72);
+    const cutoffDate = cutoff.toISOString().slice(0, 10);
+    return entries.filter((e) => e.date >= cutoffDate).length;
+  }, [entries]);
 
   const deadlineCount = stats ? stats.engReview + stats.activeDeadlines : 0;
   const tabs = [

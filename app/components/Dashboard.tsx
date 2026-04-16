@@ -568,6 +568,9 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [selectedTab, setSelectedTab] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [scraping, setScraping] = useState(false);
+  const [scrapeMsg, setScrapeMsg] = useState("");
+
   useEffect(() => {
     fetch("/api/entries")
       .then((r) => r.json())
@@ -580,6 +583,30 @@ export default function Dashboard() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  async function runScrape() {
+    const key = prompt("Enter scrape key:");
+    if (!key) return;
+    setScraping(true);
+    setScrapeMsg("Scraping... this takes ~2 minutes.");
+    try {
+      const res = await fetch(`/api/scrape?key=${encodeURIComponent(key)}`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setScrapeMsg(`Scraped ${data.total} entries. Reloading...`);
+        const r = await fetch("/api/entries");
+        const d = await r.json();
+        setEntries(d.entries);
+        setStats(d.stats);
+        setScrapeMsg("");
+      } else {
+        setScrapeMsg(`Error: ${data.error}`);
+      }
+    } catch (e) {
+      setScrapeMsg(`Error: ${e}`);
+    }
+    setScraping(false);
+  }
 
   const actionRequiredCount = entries.filter((e) => e.has_action_required).length;
 
@@ -605,8 +632,15 @@ export default function Dashboard() {
     <Page
       title="Shopify Changelog"
       subtitle={`${stats?.total ?? 0} entries · shopify.dev/changelog`}
+      primaryAction={{
+        content: scraping ? "Scraping..." : "Rescrape",
+        onAction: runScrape,
+        loading: scraping,
+      }}
     >
       <BlockStack gap="400">
+        {scrapeMsg && <Banner tone="info">{scrapeMsg}</Banner>}
+
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--p-space-300)" }}>
           {[

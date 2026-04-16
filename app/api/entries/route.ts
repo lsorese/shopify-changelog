@@ -5,12 +5,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const entries = getAllEntries();
-    const stats = getStats();
+    const [entries, stats] = await Promise.all([getAllEntries(), getStats()]);
     return NextResponse.json({ entries, stats });
   } catch (e) {
     return NextResponse.json(
-      { error: "Database not found. Run a scrape first.", detail: String(e) },
+      { error: "Failed to load data.", detail: String(e) },
       { status: 500 }
     );
   }

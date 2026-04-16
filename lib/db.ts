@@ -13,6 +13,8 @@ export interface ChangelogEntry {
   has_deprecation: boolean;
   requires_eng_review: boolean;
   url: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export async function getAllEntries(): Promise<ChangelogEntry[]> {

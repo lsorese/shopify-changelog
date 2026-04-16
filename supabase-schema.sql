@@ -35,3 +35,18 @@ drop trigger if exists changelog_updated_at on changelog_entries;
 create trigger changelog_updated_at
   before update on changelog_entries
   for each row execute function update_updated_at();
+
+-- Scrape logs
+create table if not exists scrape_logs (
+  id bigint generated always as identity primary key,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  total_entries int default 0,
+  new_entries int default 0,
+  updated_entries int default 0,
+  errors int default 0,
+  log jsonb default '[]',
+  status text default 'running'
+);
+
+create index if not exists idx_scrape_logs_started on scrape_logs (started_at desc);

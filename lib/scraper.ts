@@ -1,4 +1,5 @@
 import { upsertEntries, type ChangelogEntry } from "./db";
+import { supabase } from "./supabase";
 
 const BASE_URL = "https://shopify.dev";
 
@@ -215,9 +216,42 @@ export async function scrapeChangelog(minYear = 2025, maxYear = 2026) {
 
   log.push(`Fetched ${entries.length} details (${errors} errors)`);
 
-  // Phase 3: upsert to Supabase
-  const inserted = await upsertEntries(entries);
-  log.push(`Upserted ${inserted} entries to Supabase`);
+  // Phase 3: create scrape log
+  const { data: logRow } = await supabase
+    .from("scrape_logs")
+    .insert({ total_entries: entries.length, errors, status: "upserting" })
+    .select("id")
+    .single();
+  const logId = logRow?.id;
 
-  return { total: entries.length, errors, log };
+  // Phase 4: upsert to Supabase, track new vs updated
+  // Get existing slugs to determine new vs updated
+  const { data: existingSlugs } = await supabase
+    .from("changelog_entries")
+    .select("slug");
+  const existingSet = new Set((existingSlugs || []).map((r: { slug: string }) => r.slug));
+
+  const newEntries = entries.filter((e) => !existingSet.has(e.slug));
+  const updatedEntries = entries.filter((e) => existingSet.has(e.slug));
+
+  const inserted = await upsertEntries(entries);
+  log.push(`Upserted ${inserted} entries (${newEntries.length} new, ${updatedEntries.length} updated)`);
+
+  // Phase 5: finalize log
+  if (logId) {
+    await supabase
+      .from("scrape_logs")
+      .update({
+        finished_at: new Date().toISOString(),
+        total_entries: entries.length,
+        new_entries: newEntries.length,
+        updated_entries: updatedEntries.length,
+        errors,
+        log: newEntries.map((e) => ({ slug: e.slug, title: e.title, date: e.date, tags: e.tags })),
+        status: "complete",
+      })
+      .eq("id", logId);
+  }
+
+  return { total: entries.length, newCount: newEntries.length, errors, log };
 }

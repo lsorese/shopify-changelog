@@ -561,6 +561,70 @@ function AllChangesPanel({ entries }: { entries: Entry[] }) {
   );
 }
 
+function RecentPanel({ entries }: { entries: Entry[] }) {
+  const recent = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - 72);
+    const cutoffStr = cutoff.toISOString();
+    // Use updated_at if available (means it was added/updated recently by a scrape),
+    // otherwise fall back to the entry's published date
+    return entries.filter((e) => {
+      const ts = (e as Entry & { updated_at?: string; created_at?: string }).updated_at
+        || (e as Entry & { created_at?: string }).created_at
+        || e.date + "T00:00:00Z";
+      return ts >= cutoffStr;
+    });
+  }, [entries]);
+
+  return (
+    <Card>
+      <BlockStack gap="400">
+        <Text as="h2" variant="headingMd">{`Recent Changes (${recent.length})`}</Text>
+        <Text as="p" variant="bodySm" tone="subdued">Entries added or updated in the last 72 hours.</Text>
+
+        {recent.length === 0 ? (
+          <Banner tone="info">No changes in the last 72 hours. Run a scrape to pull new entries.</Banner>
+        ) : (
+          <ResourceList
+            items={recent}
+            renderItem={(e) => {
+              const summary = cleanSummary(e.summary).slice(0, 120);
+              return (
+                <ResourceItem
+                  id={e.slug}
+                  url={e.url}
+                  accessibilityLabel={e.title}
+                  onClick={() => window.open(e.url, "_blank")}
+                >
+                  <InlineStack gap="300" align="space-between" wrap={false}>
+                    <InlineStack gap="200" align="start" wrap={false}>
+                      <Box minWidth="50px">
+                        <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
+                      </Box>
+                      <BlockStack gap="050">
+                        <InlineStack gap="100" blockAlign="center">
+                          {statusBadge(e)}
+                          <Text as="span" variant="bodyMd" fontWeight="medium">{e.title}</Text>
+                        </InlineStack>
+                        {summary && (
+                          <div className="line-clamp-1">
+                            <Text as="span" variant="bodySm" tone="subdued">{summary}</Text>
+                          </div>
+                        )}
+                      </BlockStack>
+                    </InlineStack>
+                    <InlineStack gap="100">{areaBadges(e)}</InlineStack>
+                  </InlineStack>
+                </ResourceItem>
+              );
+            }}
+          />
+        )}
+      </BlockStack>
+    </Card>
+  );
+}
+
 // --- Main ---
 
 export default function Dashboard() {
@@ -610,8 +674,21 @@ export default function Dashboard() {
 
   const actionRequiredCount = entries.filter((e) => e.has_action_required).length;
 
+  const recentCutoff = useMemo(() => {
+    const d = new Date();
+    d.setHours(d.getHours() - 72);
+    return d.toISOString();
+  }, []);
+  const recentCount = entries.filter((e) => {
+    const ts = (e as Entry & { updated_at?: string; created_at?: string }).updated_at
+      || (e as Entry & { created_at?: string }).created_at
+      || e.date + "T00:00:00Z";
+    return ts >= recentCutoff;
+  }).length;
+
   const deadlineCount = stats ? stats.engReview + stats.activeDeadlines : 0;
   const tabs = [
+    { id: "recent", content: `Recent 72h (${recentCount})`, panelID: "recent-panel" },
     { id: "deadlines", content: `Deadlines (${deadlineCount})`, panelID: "deadlines-panel" },
     { id: "action", content: `Action Required (${actionRequiredCount})`, panelID: "action-panel" },
     { id: "features", content: `New Features (${stats?.newFeatures ?? 0})`, panelID: "features-panel" },
@@ -637,6 +714,9 @@ export default function Dashboard() {
         onAction: runScrape,
         loading: scraping,
       }}
+      secondaryActions={[
+        { content: "Scrape Logs", url: "/logs" },
+      ]}
     >
       <BlockStack gap="400">
         {scrapeMsg && <Banner tone="info">{scrapeMsg}</Banner>}
@@ -661,10 +741,11 @@ export default function Dashboard() {
         {/* Tabs + Content */}
         <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
           <Box paddingBlockStart="400">
-            {selectedTab === 0 && <DeadlinesPanel entries={entries} />}
-            {selectedTab === 1 && <ActionRequiredPanel entries={entries} />}
-            {selectedTab === 2 && <NewFeaturesPanel entries={entries} />}
-            {selectedTab === 3 && <AllChangesPanel entries={entries} />}
+            {selectedTab === 0 && <RecentPanel entries={entries} />}
+            {selectedTab === 1 && <DeadlinesPanel entries={entries} />}
+            {selectedTab === 2 && <ActionRequiredPanel entries={entries} />}
+            {selectedTab === 3 && <NewFeaturesPanel entries={entries} />}
+            {selectedTab === 4 && <AllChangesPanel entries={entries} />}
           </Box>
         </Tabs>
       </BlockStack>

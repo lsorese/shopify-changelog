@@ -1,14 +1,12 @@
 import { upsertEntries, type ChangelogEntry } from "./db";
 import { supabase } from "./supabase";
+import { AREA_TAGS } from "./constants";
 
 const BASE_URL = "https://shopify.dev";
 
 const KNOWN_TAGS = [
   "Action Required", "Breaking API Change", "Deprecation Announcement", "New", "Update",
-  "Admin GraphQL API", "Admin REST API", "Storefront GraphQL API", "Customer Account API",
-  "Payments Apps API", "Tools", "Functions", "Themes", "Shopify App Store", "Apps",
-  "Storefronts", "Admin Extensions", "Checkout UI", "Customer Accounts", "POS Extensions",
-  "Shop Minis", "Platform", "App Bridge", "Webhook", "Agents",
+  ...AREA_TAGS,
 ];
 
 const VALID_VERSIONS = [
@@ -16,13 +14,6 @@ const VALID_VERSIONS = [
   "2025-01", "2025-04", "2025-07", "2025-10",
   "2026-01", "2026-04", "2026-07", "2026-10",
 ];
-
-const AREA_TAGS = new Set([
-  "Admin GraphQL API", "Admin REST API", "Storefront GraphQL API", "Customer Account API",
-  "Payments Apps API", "Tools", "Functions", "Themes", "Shopify App Store", "Apps",
-  "Storefronts", "Admin Extensions", "Checkout UI", "Customer Accounts", "POS Extensions",
-  "Shop Minis", "Platform", "App Bridge", "Webhook", "Agents",
-]);
 
 const DATE_RE = /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/g;
 const DEADLINE_KW_RE = /(?:starting|effective|by |before|until|after|removed|sunset|deadline|must|will be|no longer|breaking|require|deprecated|shut down)/i;

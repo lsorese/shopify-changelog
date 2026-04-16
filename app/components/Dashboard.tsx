@@ -18,52 +18,11 @@ import {
   Spinner,
   Link,
 } from "@shopify/polaris";
-
-// --- Types ---
-
-interface Entry {
-  slug: string;
-  title: string;
-  date: string;
-  tags: string[];
-  summary: string;
-  deadlines: string[];
-  deadline_date: string | null;
-  has_action_required: boolean;
-  has_breaking_change: boolean;
-  has_deprecation: boolean;
-  requires_eng_review: boolean;
-  url: string;
-}
-
-interface Stats {
-  total: number;
-  engReview: number;
-  newFeatures: number;
-  activeDeadlines: number;
-}
-
-// --- Constants ---
-
-const AREA_TAGS = [
-  "Admin GraphQL API", "Admin REST API", "Storefront GraphQL API", "Functions",
-  "Checkout UI", "Themes", "POS Extensions", "Webhook", "Tools", "Platform",
-  "Apps", "Shopify App Store", "Customer Accounts", "Shop Minis", "App Bridge", "Storefronts",
-];
+import type { ChangelogEntry } from "@/lib/db";
+import { AREA_TAGS } from "@/lib/constants";
+import { cleanSummary, fmtDate, fmtDateFull } from "@/lib/format";
 
 // --- Helpers ---
-
-function cleanSummary(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/^[\s*•-]+/, "")
-    .replace(/\\r\\n|\\n/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function renderInlineCode(text: string): React.ReactNode {
   const parts = text.split(/(`[^`]+`)/g);
@@ -76,23 +35,13 @@ function renderInlineCode(text: string): React.ReactNode {
   });
 }
 
-function fmtDate(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function fmtDateFull(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 function daysUntil(dateStr: string): number {
   const target = new Date(dateStr + "T00:00:00");
   const now = new Date();
   return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function statusBadge(entry: Entry) {
+function statusBadge(entry: ChangelogEntry) {
   if (entry.has_action_required) return <Badge tone="critical">Action Required</Badge>;
   if (entry.has_breaking_change) return <Badge tone="warning">Breaking</Badge>;
   if (entry.has_deprecation) return <Badge tone="attention">Deprecation</Badge>;
@@ -101,7 +50,7 @@ function statusBadge(entry: Entry) {
   return null;
 }
 
-function areaBadges(entry: Entry, max = 2) {
+function areaBadges(entry: ChangelogEntry, max = 2) {
   const areas = entry.tags.filter((t) => AREA_TAGS.includes(t));
   return areas.slice(0, max).map((t) => <Badge key={t}>{t}</Badge>);
 }
@@ -115,9 +64,45 @@ function deadlineBadge(dateStr: string) {
   return <Badge tone="success">{`${days}d left`}</Badge>;
 }
 
+// --- Shared entry row ---
+
+function EntryRow({ entry, showSummary = true }: { entry: ChangelogEntry; showSummary?: boolean }) {
+  const summary = showSummary ? cleanSummary(entry.summary).slice(0, 140) : "";
+  return (
+    <ResourceItem
+      id={entry.slug}
+      url={entry.url}
+      accessibilityLabel={`${entry.title} — published ${fmtDate(entry.date)}`}
+      external
+    >
+      <div style={{ display: "flex", gap: "12px", alignItems: "start" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "start", flex: 1, minWidth: 0 }}>
+          <Box minWidth="50px">
+            <Text as="span" variant="bodySm" tone="subdued">{fmtDate(entry.date)}</Text>
+          </Box>
+          <BlockStack gap="050">
+            <InlineStack gap="100" blockAlign="center" wrap>
+              {statusBadge(entry)}
+              <Text as="span" variant="bodyMd" fontWeight="medium">{renderInlineCode(entry.title)}</Text>
+            </InlineStack>
+            {summary && (
+              <div className="line-clamp-1">
+                <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
+              </div>
+            )}
+          </BlockStack>
+        </div>
+        <div style={{ flexShrink: 0 }}>
+          <InlineStack gap="100">{areaBadges(entry)}</InlineStack>
+        </div>
+      </div>
+    </ResourceItem>
+  );
+}
+
 // --- Filter helper ---
 
-function useSearchFilter(entries: Entry[], filterFn: (e: Entry) => boolean) {
+function useSearchFilter(entries: ChangelogEntry[], filterFn: (e: ChangelogEntry) => boolean) {
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState<string[]>([]);
 
@@ -150,9 +135,84 @@ function useSearchFilter(entries: Entry[], filterFn: (e: Entry) => boolean) {
   return { search, setSearch: handleSearchChange, areaFilter, setAreaFilter: handleAreaChange, filtered, areaChoices, clearAll: handleClearAll };
 }
 
+// --- Reusable area filter UI ---
+
+function AreaFilterBar({
+  search, onSearchChange, onSearchClear, onClearAll,
+  areaFilter, areaChoices, onAreaChange, placeholder,
+}: {
+  search: string;
+  onSearchChange: (v: string) => void;
+  onSearchClear: () => void;
+  onClearAll: () => void;
+  areaFilter: string[];
+  areaChoices: { label: string; value: string }[];
+  onAreaChange: (v: string[]) => void;
+  placeholder: string;
+}) {
+  const appliedFilters = areaFilter.length > 0
+    ? [{ key: "area", label: areaFilter.join(", "), onRemove: () => onAreaChange([]) }]
+    : [];
+
+  return (
+    <Filters
+      queryValue={search}
+      queryPlaceholder={placeholder}
+      onQueryChange={onSearchChange}
+      onQueryClear={onSearchClear}
+      onClearAll={onClearAll}
+      filters={[
+        {
+          key: "area",
+          label: "Area",
+          filter: (
+            <ChoiceList
+              title="Area"
+              titleHidden
+              choices={areaChoices}
+              selected={areaFilter}
+              onChange={onAreaChange}
+              allowMultiple
+            />
+          ),
+          shortcut: true,
+        },
+      ]}
+      appliedFilters={appliedFilters}
+    />
+  );
+}
+
 // --- Panels ---
 
-function DeadlinesPanel({ entries }: { entries: Entry[] }) {
+function RecentPanel({ entries }: { entries: ChangelogEntry[] }) {
+  const recent = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    const cutoffDate = cutoff.toISOString().slice(0, 10);
+    return entries.filter((e) => e.date >= cutoffDate);
+  }, [entries]);
+
+  return (
+    <Card>
+      <BlockStack gap="400">
+        <Text as="h2" variant="headingMd">{`Recent Changes (${recent.length})`}</Text>
+        <Text as="p" variant="bodySm" tone="subdued">Entries published in the past 7 days.</Text>
+
+        {recent.length === 0 ? (
+          <Banner tone="info">No changes in the past 7 days. Run a scrape to pull new entries.</Banner>
+        ) : (
+          <ResourceList
+            items={recent}
+            renderItem={(e) => <EntryRow entry={e} />}
+          />
+        )}
+      </BlockStack>
+    </Card>
+  );
+}
+
+function DeadlinesPanel({ entries }: { entries: ChangelogEntry[] }) {
   const today = new Date().toISOString().slice(0, 10);
 
   const activeDeadlines = useMemo(
@@ -160,16 +220,11 @@ function DeadlinesPanel({ entries }: { entries: Entry[] }) {
     [entries, today]
   );
 
-  const engFilterFn = useCallback((e: Entry) => e.requires_eng_review && (!e.deadline_date || e.deadline_date < today), [today]);
+  const engFilterFn = useCallback((e: ChangelogEntry) => e.requires_eng_review && (!e.deadline_date || e.deadline_date < today), [today]);
   const { search, setSearch, areaFilter, setAreaFilter, filtered: engReview, areaChoices, clearAll } = useSearchFilter(entries, engFilterFn);
-
-  const appliedFilters = areaFilter.length > 0
-    ? [{ key: "area", label: areaFilter.join(", "), onRemove: () => setAreaFilter([]) }]
-    : [];
 
   return (
     <BlockStack gap="600">
-      {/* Active Deadlines */}
       <Card>
         <BlockStack gap="400">
           <Text as="h2" variant="headingMd">Active Deadlines</Text>
@@ -203,38 +258,20 @@ function DeadlinesPanel({ entries }: { entries: Entry[] }) {
         </BlockStack>
       </Card>
 
-      {/* Eng Review */}
       <Card>
         <BlockStack gap="400">
-          <InlineStack align="space-between" blockAlign="center">
-            <Text as="h2" variant="headingMd">Engineering Review ({engReview.length})</Text>
-          </InlineStack>
+          <Text as="h2" variant="headingMd">Engineering Review ({engReview.length})</Text>
           <Text as="p" variant="bodySm" tone="subdued">Breaking changes, deprecations, and action-required items.</Text>
 
-          <Filters
-            queryValue={search}
-            queryPlaceholder="Search eng review items..."
-            onQueryChange={setSearch}
-            onQueryClear={() => setSearch("")}
+          <AreaFilterBar
+            search={search}
+            onSearchChange={setSearch}
+            onSearchClear={() => setSearch("")}
             onClearAll={clearAll}
-            filters={[
-              {
-                key: "area",
-                label: "Area",
-                filter: (
-                  <ChoiceList
-                    title="Area"
-                    titleHidden
-                    choices={areaChoices}
-                    selected={areaFilter}
-                    onChange={setAreaFilter}
-                    allowMultiple
-                  />
-                ),
-                shortcut: true,
-              },
-            ]}
-            appliedFilters={appliedFilters}
+            areaFilter={areaFilter}
+            areaChoices={areaChoices}
+            onAreaChange={setAreaFilter}
+            placeholder="Search eng review items..."
           />
 
           <ResourceList
@@ -245,8 +282,8 @@ function DeadlinesPanel({ entries }: { entries: Entry[] }) {
                 <ResourceItem
                   id={e.slug}
                   url={e.url}
-                  accessibilityLabel={e.title}
-                  onClick={() => window.open(e.url, "_blank")}
+                  accessibilityLabel={`${e.title} — published ${fmtDate(e.date)}`}
+                  external
                 >
                   <div style={{ display: "flex", gap: "8px", alignItems: "start" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "start", flex: 1, minWidth: 0 }}>
@@ -274,13 +311,9 @@ function DeadlinesPanel({ entries }: { entries: Entry[] }) {
   );
 }
 
-function ActionRequiredPanel({ entries }: { entries: Entry[] }) {
-  const filterFn = useCallback((e: Entry) => e.has_action_required, []);
+function ActionRequiredPanel({ entries }: { entries: ChangelogEntry[] }) {
+  const filterFn = useCallback((e: ChangelogEntry) => e.has_action_required, []);
   const { search, setSearch, areaFilter, setAreaFilter, filtered, areaChoices, clearAll } = useSearchFilter(entries, filterFn);
-
-  const appliedFilters = areaFilter.length > 0
-    ? [{ key: "area", label: areaFilter.join(", "), onRemove: () => setAreaFilter([]) }]
-    : [];
 
   return (
     <Card>
@@ -288,30 +321,15 @@ function ActionRequiredPanel({ entries }: { entries: Entry[] }) {
         <Text as="h2" variant="headingMd">Action Required</Text>
         <Text as="p" variant="bodySm" tone="subdued">Changes that require your team to take action. Filter by area to find what applies.</Text>
 
-        <Filters
-          queryValue={search}
-          queryPlaceholder="Search action items..."
-          onQueryChange={setSearch}
-          onQueryClear={() => setSearch("")}
+        <AreaFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          onSearchClear={() => setSearch("")}
           onClearAll={clearAll}
-          filters={[
-            {
-              key: "area",
-              label: "Area",
-              filter: (
-                <ChoiceList
-                  title="Area"
-                  titleHidden
-                  choices={areaChoices}
-                  selected={areaFilter}
-                  onChange={setAreaFilter}
-                  allowMultiple
-                />
-              ),
-              shortcut: true,
-            },
-          ]}
-          appliedFilters={appliedFilters}
+          areaFilter={areaFilter}
+          areaChoices={areaChoices}
+          onAreaChange={setAreaFilter}
+          placeholder="Search action items..."
         />
 
         <Text as="p" variant="bodySm" tone="subdued">{filtered.length} items</Text>
@@ -320,13 +338,12 @@ function ActionRequiredPanel({ entries }: { entries: Entry[] }) {
           items={filtered}
           renderItem={(e) => {
             const summary = cleanSummary(e.summary).slice(0, 140);
-            const areas = e.tags.filter((t) => AREA_TAGS.includes(t));
             return (
               <ResourceItem
                 id={e.slug}
                 url={e.url}
-                accessibilityLabel={e.title}
-                onClick={() => window.open(e.url, "_blank")}
+                accessibilityLabel={`${e.title} — published ${fmtDate(e.date)}`}
+                external
               >
                 <div style={{ display: "flex", gap: "8px", alignItems: "start" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -360,13 +377,9 @@ function ActionRequiredPanel({ entries }: { entries: Entry[] }) {
   );
 }
 
-function NewFeaturesPanel({ entries }: { entries: Entry[] }) {
-  const filterFn = useCallback((e: Entry) => e.tags.includes("New") && !e.requires_eng_review, []);
+function NewFeaturesPanel({ entries }: { entries: ChangelogEntry[] }) {
+  const filterFn = useCallback((e: ChangelogEntry) => e.tags.includes("New") && !e.requires_eng_review, []);
   const { search, setSearch, areaFilter, setAreaFilter, filtered, areaChoices, clearAll } = useSearchFilter(entries, filterFn);
-
-  const appliedFilters = areaFilter.length > 0
-    ? [{ key: "area", label: areaFilter.join(", "), onRemove: () => setAreaFilter([]) }]
-    : [];
 
   return (
     <Card>
@@ -374,73 +387,29 @@ function NewFeaturesPanel({ entries }: { entries: Entry[] }) {
         <Text as="h2" variant="headingMd">New Features</Text>
         <Text as="p" variant="bodySm" tone="subdued">New platform capabilities that could benefit clients.</Text>
 
-        <Filters
-          queryValue={search}
-          queryPlaceholder="Search features..."
-          onQueryChange={setSearch}
-          onQueryClear={() => setSearch("")}
+        <AreaFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          onSearchClear={() => setSearch("")}
           onClearAll={clearAll}
-          filters={[
-            {
-              key: "area",
-              label: "Area",
-              filter: (
-                <ChoiceList
-                  title="Area"
-                  titleHidden
-                  choices={areaChoices}
-                  selected={areaFilter}
-                  onChange={setAreaFilter}
-                  allowMultiple
-                />
-              ),
-              shortcut: true,
-            },
-          ]}
-          appliedFilters={appliedFilters}
+          areaFilter={areaFilter}
+          areaChoices={areaChoices}
+          onAreaChange={setAreaFilter}
+          placeholder="Search features..."
         />
 
         <Text as="p" variant="bodySm" tone="subdued">{filtered.length} features</Text>
 
         <ResourceList
           items={filtered}
-          renderItem={(e) => {
-            const summary = cleanSummary(e.summary).slice(0, 140);
-            return (
-              <ResourceItem
-                id={e.slug}
-                url={e.url}
-                accessibilityLabel={e.title}
-                onClick={() => window.open(e.url, "_blank")}
-              >
-                <div style={{ display: "flex", gap: "8px", alignItems: "start" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <BlockStack gap="050">
-                      <InlineStack gap="200" blockAlign="center" wrap>
-                        <Text as="span" variant="bodyMd" fontWeight="semibold">{renderInlineCode(e.title)}</Text>
-                        <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
-                      </InlineStack>
-                      {summary && (
-                        <div className="line-clamp-1">
-                          <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
-                        </div>
-                      )}
-                    </BlockStack>
-                  </div>
-                  <div style={{ flexShrink: 0 }}>
-                    <InlineStack gap="100">{areaBadges(e)}</InlineStack>
-                  </div>
-                </div>
-              </ResourceItem>
-            );
-          }}
+          renderItem={(e) => <EntryRow entry={e} />}
         />
       </BlockStack>
     </Card>
   );
 }
 
-function AllChangesPanel({ entries }: { entries: Entry[] }) {
+function AllChangesPanel({ entries }: { entries: ChangelogEntry[] }) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [areaFilter, setAreaFilter] = useState<string[]>([]);
@@ -548,108 +517,33 @@ function AllChangesPanel({ entries }: { entries: Entry[] }) {
 
         <ResourceList
           items={filtered}
-          renderItem={(e) => {
-            const summary = cleanSummary(e.summary).slice(0, 120);
-            return (
-              <ResourceItem
-                id={e.slug}
-                url={e.url}
-                accessibilityLabel={e.title}
-                onClick={() => window.open(e.url, "_blank")}
-              >
-                <div style={{ display: "flex", gap: "12px", alignItems: "start" }}>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "start", flex: 1, minWidth: 0 }}>
-                    <Box minWidth="50px">
-                      <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
-                    </Box>
-                    <BlockStack gap="050">
-                      <InlineStack gap="100" blockAlign="center" wrap>
-                        {statusBadge(e)}
-                        <Text as="span" variant="bodyMd" fontWeight="medium">{renderInlineCode(e.title)}</Text>
-                      </InlineStack>
-                      {summary && (
-                        <div className="line-clamp-1">
-                          <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
-                        </div>
-                      )}
-                    </BlockStack>
-                  </div>
-                  <div style={{ flexShrink: 0 }}>
-                    <InlineStack gap="100">{areaBadges(e)}</InlineStack>
-                  </div>
-                </div>
-              </ResourceItem>
-            );
-          }}
+          renderItem={(e) => <EntryRow entry={e} />}
         />
       </BlockStack>
     </Card>
   );
 }
 
-function RecentPanel({ entries }: { entries: Entry[] }) {
-  const recent = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 7);
-    const cutoffDate = cutoff.toISOString().slice(0, 10);
-    return entries.filter((e) => e.date >= cutoffDate);
-  }, [entries]);
+// --- Stats ---
 
-  return (
-    <Card>
-      <BlockStack gap="400">
-        <Text as="h2" variant="headingMd">{`Recent Changes (${recent.length})`}</Text>
-        <Text as="p" variant="bodySm" tone="subdued">Entries published in the past 7 days.</Text>
-
-        {recent.length === 0 ? (
-          <Banner tone="info">No changes in the past 7 days. Run a scrape to pull new entries.</Banner>
-        ) : (
-          <ResourceList
-            items={recent}
-            renderItem={(e) => {
-              const summary = cleanSummary(e.summary).slice(0, 120);
-              return (
-                <ResourceItem
-                  id={e.slug}
-                  url={e.url}
-                  accessibilityLabel={e.title}
-                  onClick={() => window.open(e.url, "_blank")}
-                >
-                  <div style={{ display: "flex", gap: "12px", alignItems: "start" }}>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "start", flex: 1, minWidth: 0 }}>
-                      <Box minWidth="50px">
-                        <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
-                      </Box>
-                      <BlockStack gap="050">
-                        <InlineStack gap="100" blockAlign="center" wrap>
-                          {statusBadge(e)}
-                          <Text as="span" variant="bodyMd" fontWeight="medium">{renderInlineCode(e.title)}</Text>
-                        </InlineStack>
-                        {summary && (
-                          <div className="line-clamp-1">
-                            <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
-                          </div>
-                        )}
-                      </BlockStack>
-                    </div>
-                    <div style={{ flexShrink: 0 }}>
-                      <InlineStack gap="100">{areaBadges(e)}</InlineStack>
-                    </div>
-                  </div>
-                </ResourceItem>
-              );
-            }}
-          />
-        )}
-      </BlockStack>
-    </Card>
-  );
+interface Stats {
+  total: number;
+  engReview: number;
+  newFeatures: number;
+  activeDeadlines: number;
 }
+
+const STAT_CARDS = [
+  { key: "activeDeadlines", label: "Active Deadlines", tone: "critical" as const, tab: 1 },
+  { key: "engReview", label: "Eng Review", tone: "caution" as const, tab: 1 },
+  { key: "newFeatures", label: "New Features", tone: "success" as const, tab: 3 },
+  { key: "total", label: "Total Changes", tone: undefined, tab: 4 },
+] as const;
 
 // --- Main ---
 
 export default function Dashboard() {
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const [entries, setEntries] = useState<ChangelogEntry[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [selectedTab, setSelectedTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -713,9 +607,9 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <Page>
-        <div style={{ display: "flex", justifyContent: "center", padding: "4rem" }}>
-          <Spinner size="large" />
+      <Page title="Shopify Changelog">
+        <div role="status" aria-label="Loading dashboard" style={{ display: "flex", justifyContent: "center", padding: "4rem" }}>
+          <Spinner size="large" accessibilityLabel="Loading changelog data" />
         </div>
       </Page>
     );
@@ -729,28 +623,34 @@ export default function Dashboard() {
         content: scraping ? "Scraping..." : "Rescrape",
         onAction: runScrape,
         loading: scraping,
+        accessibilityLabel: scraping ? "Scrape in progress" : "Run a new scrape of the Shopify changelog",
       }}
       secondaryActions={[
-        { content: "Scrape Logs", url: "/logs" },
+        { content: "Scrape Logs", url: "/logs", accessibilityLabel: "View scrape history logs" },
       ]}
     >
       <BlockStack gap="400">
         {scrapeMsg && <Banner tone="info">{scrapeMsg}</Banner>}
 
         {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--p-space-300)" }}>
-          {[
-            { value: stats?.activeDeadlines ?? 0, label: "Active Deadlines", tone: "critical" as const },
-            { value: stats?.engReview ?? 0, label: "Eng Review", tone: "caution" as const },
-            { value: stats?.newFeatures ?? 0, label: "New Features", tone: "success" as const },
-            { value: stats?.total ?? 0, label: "Total Changes", tone: undefined },
-          ].map((s) => (
-            <Card key={s.label}>
-              <BlockStack gap="100">
-                <Text as="p" variant="headingLg" tone={s.tone}>{s.value}</Text>
-                <Text as="p" variant="bodySm" tone="subdued">{s.label}</Text>
-              </BlockStack>
-            </Card>
+        <div role="region" aria-label="Summary statistics" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--p-space-300)" }}>
+          {STAT_CARDS.map((s) => (
+            <div
+              key={s.label}
+              role="button"
+              tabIndex={0}
+              aria-label={`${stats?.[s.key] ?? 0} ${s.label} — click to view`}
+              onClick={() => setSelectedTab(s.tab)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedTab(s.tab); } }}
+              style={{ cursor: "pointer" }}
+            >
+              <Card>
+                <BlockStack gap="100">
+                  <Text as="p" variant="headingLg" tone={s.tone}>{stats?.[s.key] ?? 0}</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">{s.label}</Text>
+                </BlockStack>
+              </Card>
+            </div>
           ))}
         </div>
 

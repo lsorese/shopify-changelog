@@ -1,37 +1,11 @@
 import { supabase } from "./supabase";
 import type { ChangelogEntry } from "./db";
-
-const AREA_TAGS = new Set([
-  "Admin GraphQL API", "Admin REST API", "Storefront GraphQL API", "Customer Account API",
-  "Payments Apps API", "Tools", "Functions", "Themes", "Shopify App Store", "Apps",
-  "Storefronts", "Admin Extensions", "Checkout UI", "Customer Accounts", "POS Extensions",
-  "Shop Minis", "Platform", "App Bridge", "Webhook", "Agents",
-]);
+import { AREA_TAGS_SET } from "./constants";
+import { fmtDate, stripBackticks } from "./format";
 
 function getAreas(e: ChangelogEntry): string {
-  const areas = e.tags.filter((t) => AREA_TAGS.has(t));
+  const areas = e.tags.filter((t) => AREA_TAGS_SET.has(t));
   return areas.length > 0 ? areas.join(", ") : "";
-}
-
-function fmtDate(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function stripBackticks(text: string): string {
-  return text.replace(/`/g, "");
-}
-
-function cleanSummary(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/\\r\\n|\\n/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 export async function buildSlackDigest(dashboardUrl: string) {
@@ -175,7 +149,7 @@ export async function buildSlackDigest(dashboardUrl: string) {
     // Group by primary area
     const byArea: Record<string, ChangelogEntry[]> = {};
     for (const e of newFeatures) {
-      const areas = e.tags.filter((t) => AREA_TAGS.has(t));
+      const areas = e.tags.filter((t) => AREA_TAGS_SET.has(t));
       const key = areas[0] || "General";
       if (!byArea[key]) byArea[key] = [];
       byArea[key].push(e);

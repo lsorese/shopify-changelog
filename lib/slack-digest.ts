@@ -71,7 +71,6 @@ export async function buildSlackDigest(dashboardUrl: string) {
     .from("changelog_entries")
     .select("*")
     .gte("deadline_date", today)
-    .lte("deadline_date", thirtyDaysStr)
     .order("deadline_date", { ascending: true });
 
   const upcomingDeadlines = (deadlineEntries || []) as ChangelogEntry[];

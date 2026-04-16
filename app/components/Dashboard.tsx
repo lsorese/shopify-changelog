@@ -590,9 +590,8 @@ function AllChangesPanel({ entries }: { entries: Entry[] }) {
 function RecentPanel({ entries }: { entries: Entry[] }) {
   const recent = useMemo(() => {
     const cutoff = new Date();
-    cutoff.setHours(cutoff.getHours() - 72);
+    cutoff.setDate(cutoff.getDate() - 7);
     const cutoffDate = cutoff.toISOString().slice(0, 10);
-    // Filter by Shopify's published date — what was actually posted in the last 72h
     return entries.filter((e) => e.date >= cutoffDate);
   }, [entries]);
 
@@ -600,10 +599,10 @@ function RecentPanel({ entries }: { entries: Entry[] }) {
     <Card>
       <BlockStack gap="400">
         <Text as="h2" variant="headingMd">{`Recent Changes (${recent.length})`}</Text>
-        <Text as="p" variant="bodySm" tone="subdued">Entries added or updated in the last 72 hours.</Text>
+        <Text as="p" variant="bodySm" tone="subdued">Entries published in the past 7 days.</Text>
 
         {recent.length === 0 ? (
-          <Banner tone="info">No changes in the last 72 hours. Run a scrape to pull new entries.</Banner>
+          <Banner tone="info">No changes in the past 7 days. Run a scrape to pull new entries.</Banner>
         ) : (
           <ResourceList
             items={recent}
@@ -698,14 +697,14 @@ export default function Dashboard() {
 
   const recentCount = useMemo(() => {
     const cutoff = new Date();
-    cutoff.setHours(cutoff.getHours() - 72);
+    cutoff.setDate(cutoff.getDate() - 7);
     const cutoffDate = cutoff.toISOString().slice(0, 10);
     return entries.filter((e) => e.date >= cutoffDate).length;
   }, [entries]);
 
   const deadlineCount = stats ? stats.engReview + stats.activeDeadlines : 0;
   const tabs = [
-    { id: "recent", content: `Recent 72h (${recentCount})`, panelID: "recent-panel" },
+    { id: "recent", content: `Past 7 Days (${recentCount})`, panelID: "recent-panel" },
     { id: "deadlines", content: `Deadlines (${deadlineCount})`, panelID: "deadlines-panel" },
     { id: "action", content: `Action Required (${actionRequiredCount})`, panelID: "action-panel" },
     { id: "features", content: `New Features (${stats?.newFeatures ?? 0})`, panelID: "features-panel" },
@@ -754,6 +753,8 @@ export default function Dashboard() {
             </Card>
           ))}
         </div>
+
+        <Box borderBlockStartWidth="025" borderColor="border" paddingBlockStart="400" />
 
         {/* Tabs + Content */}
         <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>

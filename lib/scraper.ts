@@ -208,11 +208,15 @@ export async function scrapeChangelog(minYear = 2025, maxYear = 2026) {
   log.push(`Fetched ${entries.length} details (${errors} errors)`);
 
   // Phase 3: create scrape log
-  const { data: logRow } = await supabase
+  const { data: logRow, error: logError } = await supabase
     .from("scrape_logs")
     .insert({ total_entries: entries.length, errors, status: "upserting" })
     .select("id")
     .single();
+
+  if (logError) {
+    console.error("Failed to create scrape_logs entry:", logError.message);
+  }
   const logId = logRow?.id;
 
   // Phase 4: upsert to Supabase, track new vs updated
@@ -230,7 +234,7 @@ export async function scrapeChangelog(minYear = 2025, maxYear = 2026) {
 
   // Phase 5: finalize log
   if (logId) {
-    await supabase
+    const { error: updateError } = await supabase
       .from("scrape_logs")
       .update({
         finished_at: new Date().toISOString(),
@@ -242,6 +246,12 @@ export async function scrapeChangelog(minYear = 2025, maxYear = 2026) {
         status: "complete",
       })
       .eq("id", logId);
+
+    if (updateError) {
+      console.error("Failed to update scrape_logs entry:", updateError.message);
+    }
+  } else {
+    console.error("Skipping scrape_logs finalization — no log row was created");
   }
 
   return { total: entries.length, newCount: newEntries.length, errors, log };

@@ -58,12 +58,22 @@ function cleanSummary(text: string): string {
   return text
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/^[\s*•-]+/, "")
     .replace(/\\r\\n|\\n/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function renderInlineCode(text: string): React.ReactNode {
+  const parts = text.split(/(`[^`]+`)/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <code key={i} style={{ background: "#f1f1f1", padding: "1px 4px", borderRadius: 3, fontSize: "0.9em" }}>{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
 }
 
 function fmtDate(iso: string): string {
@@ -180,9 +190,9 @@ function DeadlinesPanel({ entries }: { entries: Entry[] }) {
                         {statusBadge(e)}
                       </InlineStack>
                       <Link url={e.url} target="_blank" removeUnderline>
-                        <Text as="span" variant="bodyMd" fontWeight="semibold">{e.title}</Text>
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">{renderInlineCode(e.title)}</Text>
                       </Link>
-                      {detail && <Text as="p" variant="bodySm" tone="subdued">{detail.slice(0, 200)}</Text>}
+                      {detail && <Text as="p" variant="bodySm" tone="subdued">{renderInlineCode(detail.slice(0, 200))}</Text>}
                       <InlineStack gap="100">{areaBadges(e, 3)}</InlineStack>
                     </BlockStack>
                   </Card>
@@ -238,20 +248,22 @@ function DeadlinesPanel({ entries }: { entries: Entry[] }) {
                   accessibilityLabel={e.title}
                   onClick={() => window.open(e.url, "_blank")}
                 >
-                  <InlineStack gap="200" align="space-between" wrap={false}>
-                    <InlineStack gap="200" align="start" blockAlign="start" wrap={false}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "start" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "start", flex: 1, minWidth: 0 }}>
                       <Box minWidth="50px">
                         <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
                       </Box>
                       <BlockStack gap="050">
-                        <Text as="span" variant="bodyMd" fontWeight="medium">{e.title}</Text>
+                        <Text as="span" variant="bodyMd" fontWeight="medium">{renderInlineCode(e.title)}</Text>
                         {areas.length > 0 && (
                           <Text as="span" variant="bodySm" tone="subdued">{areas.join(", ")}</Text>
                         )}
                       </BlockStack>
-                    </InlineStack>
-                    <InlineStack gap="100">{statusBadge(e)}</InlineStack>
-                  </InlineStack>
+                    </div>
+                    <div style={{ flexShrink: 0 }}>
+                      <InlineStack gap="100">{statusBadge(e)}</InlineStack>
+                    </div>
+                  </div>
                 </ResourceItem>
               );
             }}
@@ -316,21 +328,29 @@ function ActionRequiredPanel({ entries }: { entries: Entry[] }) {
                 accessibilityLabel={e.title}
                 onClick={() => window.open(e.url, "_blank")}
               >
-                <InlineStack gap="200" align="space-between" wrap={false}>
-                  <BlockStack gap="050">
-                    <InlineStack gap="200" blockAlign="center">
-                      <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
-                      {e.deadline_date && (
-                        <Text as="span" variant="bodySm" fontWeight="bold" tone="critical">Due {fmtDateFull(e.deadline_date)}</Text>
+                <div style={{ display: "flex", gap: "8px", alignItems: "start" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <BlockStack gap="050">
+                      <InlineStack gap="200" blockAlign="center" wrap>
+                        <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
+                        {e.deadline_date && (
+                          <Text as="span" variant="bodySm" fontWeight="bold" tone="critical">Due {fmtDateFull(e.deadline_date)}</Text>
+                        )}
+                        {e.has_breaking_change && <Badge tone="warning">Breaking</Badge>}
+                        {e.has_deprecation && <Badge tone="attention">Deprecation</Badge>}
+                      </InlineStack>
+                      <Text as="span" variant="bodyMd" fontWeight="semibold">{renderInlineCode(e.title)}</Text>
+                      {summary && (
+                        <div className="line-clamp-1">
+                          <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
+                        </div>
                       )}
-                      {e.has_breaking_change && <Badge tone="warning">Breaking</Badge>}
-                      {e.has_deprecation && <Badge tone="attention">Deprecation</Badge>}
-                    </InlineStack>
-                    <Text as="span" variant="bodyMd" fontWeight="semibold">{e.title}</Text>
-                    {summary && <Text as="span" variant="bodySm" tone="subdued">{summary}</Text>}
-                  </BlockStack>
-                  <InlineStack gap="100">{areaBadges(e)}</InlineStack>
-                </InlineStack>
+                    </BlockStack>
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    <InlineStack gap="100">{areaBadges(e)}</InlineStack>
+                  </div>
+                </div>
               </ResourceItem>
             );
           }}
@@ -393,20 +413,24 @@ function NewFeaturesPanel({ entries }: { entries: Entry[] }) {
                 accessibilityLabel={e.title}
                 onClick={() => window.open(e.url, "_blank")}
               >
-                <InlineStack gap="200" align="space-between" wrap={false}>
-                  <BlockStack gap="050">
-                    <InlineStack gap="200" blockAlign="center">
-                      <Text as="span" variant="bodyMd" fontWeight="semibold">{e.title}</Text>
-                      <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
-                    </InlineStack>
-                    {summary && (
-                      <div className="line-clamp-1">
-                        <Text as="span" variant="bodySm" tone="subdued">{summary}</Text>
-                      </div>
-                    )}
-                  </BlockStack>
-                  <InlineStack gap="100">{areaBadges(e)}</InlineStack>
-                </InlineStack>
+                <div style={{ display: "flex", gap: "8px", alignItems: "start" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <BlockStack gap="050">
+                      <InlineStack gap="200" blockAlign="center" wrap>
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">{renderInlineCode(e.title)}</Text>
+                        <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
+                      </InlineStack>
+                      {summary && (
+                        <div className="line-clamp-1">
+                          <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
+                        </div>
+                      )}
+                    </BlockStack>
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    <InlineStack gap="100">{areaBadges(e)}</InlineStack>
+                  </div>
+                </div>
               </ResourceItem>
             );
           }}
@@ -533,25 +557,27 @@ function AllChangesPanel({ entries }: { entries: Entry[] }) {
                 accessibilityLabel={e.title}
                 onClick={() => window.open(e.url, "_blank")}
               >
-                <InlineStack gap="300" align="space-between" wrap={false}>
-                  <InlineStack gap="200" align="start" wrap={false}>
+                <div style={{ display: "flex", gap: "12px", alignItems: "start" }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "start", flex: 1, minWidth: 0 }}>
                     <Box minWidth="50px">
                       <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
                     </Box>
                     <BlockStack gap="050">
-                      <InlineStack gap="100" blockAlign="center">
+                      <InlineStack gap="100" blockAlign="center" wrap>
                         {statusBadge(e)}
-                        <Text as="span" variant="bodyMd" fontWeight="medium">{e.title}</Text>
+                        <Text as="span" variant="bodyMd" fontWeight="medium">{renderInlineCode(e.title)}</Text>
                       </InlineStack>
                       {summary && (
                         <div className="line-clamp-1">
-                          <Text as="span" variant="bodySm" tone="subdued">{summary}</Text>
+                          <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
                         </div>
                       )}
                     </BlockStack>
-                  </InlineStack>
-                  <InlineStack gap="100">{areaBadges(e)}</InlineStack>
-                </InlineStack>
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    <InlineStack gap="100">{areaBadges(e)}</InlineStack>
+                  </div>
+                </div>
               </ResourceItem>
             );
           }}
@@ -590,25 +616,27 @@ function RecentPanel({ entries }: { entries: Entry[] }) {
                   accessibilityLabel={e.title}
                   onClick={() => window.open(e.url, "_blank")}
                 >
-                  <InlineStack gap="300" align="space-between" wrap={false}>
-                    <InlineStack gap="200" align="start" wrap={false}>
+                  <div style={{ display: "flex", gap: "12px", alignItems: "start" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "start", flex: 1, minWidth: 0 }}>
                       <Box minWidth="50px">
                         <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
                       </Box>
                       <BlockStack gap="050">
-                        <InlineStack gap="100" blockAlign="center">
+                        <InlineStack gap="100" blockAlign="center" wrap>
                           {statusBadge(e)}
-                          <Text as="span" variant="bodyMd" fontWeight="medium">{e.title}</Text>
+                          <Text as="span" variant="bodyMd" fontWeight="medium">{renderInlineCode(e.title)}</Text>
                         </InlineStack>
                         {summary && (
                           <div className="line-clamp-1">
-                            <Text as="span" variant="bodySm" tone="subdued">{summary}</Text>
+                            <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
                           </div>
                         )}
                       </BlockStack>
-                    </InlineStack>
-                    <InlineStack gap="100">{areaBadges(e)}</InlineStack>
-                  </InlineStack>
+                    </div>
+                    <div style={{ flexShrink: 0 }}>
+                      <InlineStack gap="100">{areaBadges(e)}</InlineStack>
+                    </div>
+                  </div>
                 </ResourceItem>
               );
             }}

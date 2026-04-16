@@ -18,6 +18,10 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function stripBackticks(text: string): string {
+  return text.replace(/`/g, "");
+}
+
 function cleanSummary(text: string): string {
   if (!text) return "";
   return text
@@ -107,7 +111,7 @@ export async function buildSlackDigest(dashboardUrl: string) {
         (new Date(e.deadline_date! + "T00:00:00").getTime() - Date.now()) / (1000 * 60 * 60 * 24)
       );
       const urgency = days <= 7 ? ":rotating_light:" : days <= 14 ? ":warning:" : "";
-      return `${urgency} • <${e.url}|${e.title}> — *${fmtDate(e.deadline_date!)}* (${days}d) — _${getAreas(e) || "General"}_`;
+      return `${urgency} • <${e.url}|${stripBackticks(e.title)}> — *${fmtDate(e.deadline_date!)}* (${days}d) — _${getAreas(e) || "General"}_`;
     });
     blocks.push({
       type: "section",
@@ -128,7 +132,7 @@ export async function buildSlackDigest(dashboardUrl: string) {
     const actionLines = actionRequired.map((e) => {
       const deadline = e.deadline_date ? ` — _Due ${fmtDate(e.deadline_date)}_` : "";
       const area = getAreas(e);
-      return `• <${e.url}|${e.title}>${deadline}${area ? ` — _${area}_` : ""}`;
+      return `• <${e.url}|${stripBackticks(e.title)}>${deadline}${area ? ` — _${area}_` : ""}`;
     });
     blocks.push({
       type: "section",
@@ -149,7 +153,7 @@ export async function buildSlackDigest(dashboardUrl: string) {
     const breakingLines = breaking.map((e) => {
       const label = e.has_breaking_change ? "Breaking" : "Deprecation";
       const area = getAreas(e);
-      return `• <${e.url}|${e.title}> — _${label}${area ? ` · ${area}` : ""}_`;
+      return `• <${e.url}|${stripBackticks(e.title)}> — _${label}${area ? ` · ${area}` : ""}_`;
     });
     blocks.push({
       type: "section",
@@ -180,7 +184,7 @@ export async function buildSlackDigest(dashboardUrl: string) {
     const featureLines = Object.entries(byArea)
       .sort((a, b) => b[1].length - a[1].length)
       .map(([area, items]) => {
-        const links = items.map((e) => `<${e.url}|${e.title}>`).join(", ");
+        const links = items.map((e) => `<${e.url}|${stripBackticks(e.title)}>`).join(", ");
         return `*${area}:* ${links}`;
       });
 

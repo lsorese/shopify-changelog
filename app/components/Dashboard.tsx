@@ -10,7 +10,6 @@ import {
   InlineStack,
   BlockStack,
   Box,
-  Button,
   ResourceList,
   ResourceItem,
   Filters,
@@ -101,9 +100,9 @@ function deadlineBadge(dateStr: string) {
   const days = daysUntil(dateStr);
   if (days < 0) return <Badge tone="critical">OVERDUE</Badge>;
   if (days === 0) return <Badge tone="critical">TODAY</Badge>;
-  if (days <= 14) return <Badge tone="critical">{days}d left</Badge>;
-  if (days <= 60) return <Badge tone="warning">{days}d left</Badge>;
-  return <Badge tone="success">{days}d left</Badge>;
+  if (days <= 14) return <Badge tone="critical">{`${days}d left`}</Badge>;
+  if (days <= 60) return <Badge tone="warning">{`${days}d left`}</Badge>;
+  return <Badge tone="success">{`${days}d left`}</Badge>;
 }
 
 // --- Filter helper ---
@@ -569,9 +568,6 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [selectedTab, setSelectedTab] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [scraping, setScraping] = useState(false);
-  const [scrapeMsg, setScrapeMsg] = useState("");
-
   useEffect(() => {
     fetch("/api/entries")
       .then((r) => r.json())
@@ -587,74 +583,13 @@ export default function Dashboard() {
 
   const actionRequiredCount = entries.filter((e) => e.has_action_required).length;
 
+  const deadlineCount = stats ? stats.engReview + stats.activeDeadlines : 0;
   const tabs = [
-    {
-      id: "deadlines",
-      content: (
-        <InlineStack gap="100" blockAlign="center">
-          <span>Deadlines</span>
-          <Badge tone="critical">{String(stats ? stats.engReview + stats.activeDeadlines : 0)}</Badge>
-        </InlineStack>
-      ),
-      accessibilityLabel: "Deadlines",
-      panelID: "deadlines-panel",
-    },
-    {
-      id: "action",
-      content: (
-        <InlineStack gap="100" blockAlign="center">
-          <span>Action Required</span>
-          <Badge tone="critical">{String(actionRequiredCount)}</Badge>
-        </InlineStack>
-      ),
-      accessibilityLabel: "Action Required",
-      panelID: "action-panel",
-    },
-    {
-      id: "features",
-      content: (
-        <InlineStack gap="100" blockAlign="center">
-          <span>New Features</span>
-          <Badge tone="success">{String(stats?.newFeatures ?? 0)}</Badge>
-        </InlineStack>
-      ),
-      accessibilityLabel: "New Features",
-      panelID: "features-panel",
-    },
-    {
-      id: "all",
-      content: (
-        <InlineStack gap="100" blockAlign="center">
-          <span>All Changes</span>
-          <Badge>{String(stats?.total ?? 0)}</Badge>
-        </InlineStack>
-      ),
-      accessibilityLabel: "All Changes",
-      panelID: "all-panel",
-    },
+    { id: "deadlines", content: `Deadlines (${deadlineCount})`, panelID: "deadlines-panel" },
+    { id: "action", content: `Action Required (${actionRequiredCount})`, panelID: "action-panel" },
+    { id: "features", content: `New Features (${stats?.newFeatures ?? 0})`, panelID: "features-panel" },
+    { id: "all", content: `All Changes (${stats?.total ?? 0})`, panelID: "all-panel" },
   ];
-
-  async function runScrape() {
-    setScraping(true);
-    setScrapeMsg("Scraping... this takes ~2 minutes.");
-    try {
-      const res = await fetch("/api/scrape", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        setScrapeMsg(`Scraped ${data.total} entries. Reloading...`);
-        const r = await fetch("/api/entries");
-        const d = await r.json();
-        setEntries(d.entries);
-        setStats(d.stats);
-        setScrapeMsg("");
-      } else {
-        setScrapeMsg(`Error: ${data.error}`);
-      }
-    } catch (e) {
-      setScrapeMsg(`Error: ${e}`);
-    }
-    setScraping(false);
-  }
 
   if (loading) {
     return (
@@ -670,15 +605,8 @@ export default function Dashboard() {
     <Page
       title="Shopify Changelog"
       subtitle={`${stats?.total ?? 0} entries · shopify.dev/changelog`}
-      primaryAction={{
-        content: scraping ? "Scraping..." : "Rescrape",
-        onAction: runScrape,
-        loading: scraping,
-      }}
     >
       <BlockStack gap="400">
-        {scrapeMsg && <Banner tone="info">{scrapeMsg}</Banner>}
-
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--p-space-300)" }}>
           {[

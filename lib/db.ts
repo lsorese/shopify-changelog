@@ -38,7 +38,7 @@ export async function getStats() {
   const { count: newFeatures } = await supabase
     .from("changelog_entries")
     .select("*", { count: "exact", head: true })
-    .contains("tags", ["New"])
+    .filter("tags", "cs", '["New"]')
     .eq("requires_eng_review", false);
 
   const today = new Date().toISOString().slice(0, 10);

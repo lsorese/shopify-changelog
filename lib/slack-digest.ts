@@ -38,44 +38,53 @@ function areaBreakdown(entries: ChangelogEntry[]): string {
 }
 
 export async function buildSlackDigest(dashboardUrl: string) {
-  // Fetch entries from last 72h by published date
-  const cutoff = new Date();
-  cutoff.setHours(cutoff.getHours() - 72);
-  const cutoffDate = cutoff.toISOString().slice(0, 10);
-
-  const { data: entries, error } = await supabase
+  // Fetch only entries that haven't been sent to Slack yet
+  const { data: newEntries, error } = await supabase
     .from("changelog_entries")
     .select("*")
-    .gte("date", cutoffDate)
+    .is("slack_notified_at", null)
     .order("date", { ascending: false });
 
   if (error) throw error;
-  if (!entries || entries.length === 0) {
-    return buildEmptyDigest(dashboardUrl);
+
+  const allNew = (newEntries || []) as ChangelogEntry[];
+
+  // Fetch older breaking/deprecation entries that were already notified
+  // (still active reminders worth surfacing as a count)
+  const { data: olderCritical, error: olderError } = await supabase
+    .from("changelog_entries")
+    .select("*")
+    .not("slack_notified_at", "is", null)
+    .or("has_breaking_change.eq.true,has_deprecation.eq.true,has_action_required.eq.true")
+    .order("date", { ascending: false });
+
+  if (olderError) throw olderError;
+
+  const olderEntries = (olderCritical || []) as ChangelogEntry[];
+
+  if (allNew.length === 0 && olderEntries.length === 0) {
+    return { blocks: buildEmptyDigest(dashboardUrl), summary: "No new changes", slugsToMark: [] };
   }
 
-  const allEntries = entries as ChangelogEntry[];
-
-  // Categorize — each entry goes into the highest-priority bucket only
-  const actionRequired = allEntries.filter((e) => e.has_action_required);
-  const breaking = allEntries.filter(
+  // Categorize new entries — each goes into the highest-priority bucket only
+  const actionRequired = allNew.filter((e) => e.has_action_required);
+  const breaking = allNew.filter(
     (e) => (e.has_breaking_change || e.has_deprecation) && !e.has_action_required
   );
-  const engReview = allEntries.filter(
+  const engReview = allNew.filter(
     (e) => e.requires_eng_review && !e.has_action_required && !e.has_breaking_change && !e.has_deprecation
   );
-  const newFeatures = allEntries.filter(
+  const newFeatures = allNew.filter(
     (e) => e.tags.includes("New") && !e.requires_eng_review && !e.has_action_required && !e.has_breaking_change && !e.has_deprecation
   );
   const categorized = new Set([
     ...actionRequired, ...breaking, ...engReview, ...newFeatures,
   ].map((e) => e.slug));
-  // API & webhook changes not already in a higher-priority bucket
-  const apiChanges = allEntries.filter(
+  const apiChanges = allNew.filter(
     (e) => !categorized.has(e.slug) && e.tags.some((t) => API_TAGS.has(t))
   );
   const apiSlugs = new Set(apiChanges.map((e) => e.slug));
-  const other = allEntries.filter(
+  const other = allNew.filter(
     (e) => !categorized.has(e.slug) && !apiSlugs.has(e.slug)
   );
 
@@ -101,25 +110,31 @@ export async function buildSlackDigest(dashboardUrl: string) {
   if (apiChanges.length > 0) summaryParts.push(`:gear: ${apiChanges.length} API`);
   if (other.length > 0) summaryParts.push(`:memo: ${other.length} other`);
 
+  const headerText = allNew.length > 0
+    ? `*${allNew.length} new change${allNew.length === 1 ? "" : "s"}*`
+    : "*No new changes*";
+
   blocks.push({
     type: "context",
     elements: [
       {
         type: "mrkdwn",
-        text: `*${allEntries.length} changes* · ${fmtDate(cutoffDate)} — ${fmtDate(today)}\n${summaryParts.join(" · ")}`,
+        text: `${headerText}\n${summaryParts.join(" · ")}`,
       },
     ],
   });
 
-  // Area breakdown
-  const breakdown = areaBreakdown(allEntries);
-  if (breakdown) {
-    blocks.push({
-      type: "context",
-      elements: [
-        { type: "mrkdwn", text: `*By area:* ${breakdown}` },
-      ],
-    });
+  // Area breakdown (new entries only)
+  if (allNew.length > 0) {
+    const breakdown = areaBreakdown(allNew);
+    if (breakdown) {
+      blocks.push({
+        type: "context",
+        elements: [
+          { type: "mrkdwn", text: `*By area:* ${breakdown}` },
+        ],
+      });
+    }
   }
 
   blocks.push({ type: "divider" });
@@ -283,6 +298,28 @@ export async function buildSlackDigest(dashboardUrl: string) {
     });
   }
 
+  // Section 8: Older breaking/deprecation reminder
+  if (olderEntries.length > 0) {
+    blocks.push({ type: "divider" });
+
+    const olderAction = olderEntries.filter((e) => e.has_action_required);
+    const olderBreaking = olderEntries.filter((e) => !e.has_action_required);
+
+    const parts: string[] = [];
+    if (olderAction.length > 0) parts.push(`${olderAction.length} action required`);
+    if (olderBreaking.length > 0) parts.push(`${olderBreaking.length} breaking/deprecation`);
+
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `:pushpin: *${olderEntries.length} older critical change${olderEntries.length === 1 ? "" : "s"}* still active (${parts.join(", ")}) — <${dashboardUrl}|View on Dashboard>`,
+        },
+      ],
+    });
+  }
+
   // Footer
   blocks.push({ type: "divider" });
   blocks.push({
@@ -290,40 +327,58 @@ export async function buildSlackDigest(dashboardUrl: string) {
     elements: [
       {
         type: "mrkdwn",
-        text: `<${dashboardUrl}|Open Dashboard> · Next digest in 72 hours`,
+        text: `<${dashboardUrl}|Open Dashboard> · Next digest tomorrow`,
       },
     ],
   });
 
-  return { blocks, summary: `${allEntries.length} changes in the last 72h` };
-}
-
-function buildEmptyDigest(dashboardUrl: string) {
   return {
-    blocks: [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "No new changelog entries in the last 72 hours. :relieved:",
-        },
-      },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: `<${dashboardUrl}|Open Dashboard> · Next digest in 72 hours`,
-          },
-        ],
-      },
-    ],
-    summary: "No new changes in the last 72h",
+    blocks,
+    summary: `${allNew.length} new change${allNew.length === 1 ? "" : "s"}`,
+    slugsToMark: allNew.map((e) => e.slug),
   };
 }
 
+function buildEmptyDigest(dashboardUrl: string) {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "No new changelog entries. :relieved:",
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `<${dashboardUrl}|Open Dashboard> · Next digest tomorrow`,
+        },
+      ],
+    },
+  ];
+}
+
+async function markEntriesNotified(slugs: string[]) {
+  if (slugs.length === 0) return;
+
+  const now = new Date().toISOString();
+  const batchSize = 100;
+
+  for (let i = 0; i < slugs.length; i += batchSize) {
+    const batch = slugs.slice(i, i + batchSize);
+    const { error } = await supabase
+      .from("changelog_entries")
+      .update({ slack_notified_at: now })
+      .in("slug", batch);
+
+    if (error) throw error;
+  }
+}
+
 export async function sendSlackDigest(webhookUrl: string, dashboardUrl: string) {
-  const { blocks, summary } = await buildSlackDigest(dashboardUrl);
+  const { blocks, summary, slugsToMark } = await buildSlackDigest(dashboardUrl);
 
   const res = await fetch(webhookUrl, {
     method: "POST",
@@ -334,6 +389,9 @@ export async function sendSlackDigest(webhookUrl: string, dashboardUrl: string) 
   if (!res.ok) {
     throw new Error(`Slack webhook failed: ${res.status} ${await res.text()}`);
   }
+
+  // Mark entries as notified only after successful send
+  await markEntriesNotified(slugsToMark);
 
   return { ok: true, summary };
 }

@@ -27,9 +27,9 @@ export async function POST(request: NextRequest) {
   const dashboardUrl = process.env.DASHBOARD_URL || "https://shopify-changelog.vercel.app";
 
   if (preview) {
-    // Return the blocks without sending to Slack
-    const { blocks, summary } = await buildSlackDigest(dashboardUrl);
-    return NextResponse.json({ preview: true, summary, blocks });
+    // Return the blocks without sending to Slack (don't mark as notified)
+    const { blocks, summary, slugsToMark } = await buildSlackDigest(dashboardUrl);
+    return NextResponse.json({ preview: true, summary, blocks, newEntries: slugsToMark.length });
   }
 
   return runDigest();

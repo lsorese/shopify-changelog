@@ -13,6 +13,7 @@ export interface ChangelogEntry {
   has_deprecation: boolean;
   requires_eng_review: boolean;
   url: string;
+  slack_notified_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }

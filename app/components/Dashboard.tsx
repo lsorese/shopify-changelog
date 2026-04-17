@@ -28,6 +28,7 @@ import {
   RefreshIcon,
   MenuIcon,
   TextFontIcon,
+  AlertDiamondIcon,
 } from "@shopify/polaris-icons";
 import type { ChangelogEntry } from "@/lib/db";
 import { AREA_TAGS } from "@/lib/constants";
@@ -248,8 +249,8 @@ function OverviewPanel({
 
   const statCards: { key: keyof Stats; label: string; tone: "critical" | "caution" | "success" | undefined; section: Section }[] = [
     { key: "activeDeadlines", label: "Active Deadlines", tone: "critical", section: "deadlines" },
-    { key: "engReview", label: "Eng Review", tone: "caution", section: "deadlines" },
-    { key: "newFeatures", label: "New Features", tone: "success", section: "features" },
+    { key: "engReview", label: "Eng Review (30d)", tone: "caution", section: "deadlines" },
+    { key: "newFeatures", label: "New Features (30d)", tone: "success", section: "features" },
     { key: "total", label: "Total Changes", tone: undefined, section: "all" },
   ];
 
@@ -464,6 +465,72 @@ function ActionRequiredPanel({ entries }: { entries: ChangelogEntry[] }) {
   );
 }
 
+function DeprecationsPanel({ entries }: { entries: ChangelogEntry[] }) {
+  const filterFn = useCallback((e: ChangelogEntry) => e.has_breaking_change || e.has_deprecation, []);
+  const { search, setSearch, areaFilter, setAreaFilter, filtered, areaChoices, clearAll } = useSearchFilter(entries, filterFn);
+
+  return (
+    <Card>
+      <BlockStack gap="400">
+        <Text as="h2" variant="headingMd">Deprecations & Breaking Changes</Text>
+        <Text as="p" variant="bodySm" tone="subdued">Features being deprecated or APIs with breaking changes. Review for impact on your projects.</Text>
+
+        <AreaFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          onSearchClear={() => setSearch("")}
+          onClearAll={clearAll}
+          areaFilter={areaFilter}
+          areaChoices={areaChoices}
+          onAreaChange={setAreaFilter}
+          placeholder="Search deprecations..."
+        />
+
+        <Text as="p" variant="bodySm" tone="subdued">{filtered.length} items</Text>
+
+        <ResourceList
+          items={filtered}
+          renderItem={(e) => {
+            const summary = cleanSummary(e.summary).slice(0, 140);
+            return (
+              <ResourceItem
+                id={e.slug}
+                url={e.url}
+                accessibilityLabel={`${e.title} — published ${fmtDate(e.date)}`}
+                external
+              >
+                <div style={{ display: "flex", gap: "8px", alignItems: "start" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <BlockStack gap="050">
+                      <InlineStack gap="200" blockAlign="center" wrap>
+                        <Text as="span" variant="bodySm" tone="subdued">{fmtDate(e.date)}</Text>
+                        {e.deadline_date && (
+                          <Text as="span" variant="bodySm" fontWeight="bold" tone="critical">Due {fmtDateFull(e.deadline_date)}</Text>
+                        )}
+                        {e.has_breaking_change && <Badge tone="warning">Breaking</Badge>}
+                        {e.has_deprecation && <Badge tone="attention">Deprecation</Badge>}
+                      </InlineStack>
+                      <Text as="span" variant="bodyMd" fontWeight="semibold">{renderInlineCode(e.title)}</Text>
+                      {summary && (
+                        <div className="line-clamp-1">
+                          <Text as="span" variant="bodySm" tone="subdued">{renderInlineCode(summary)}</Text>
+                        </div>
+                      )}
+                    </BlockStack>
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    <InlineStack gap="100">{areaBadges(e)}</InlineStack>
+                  </div>
+                </div>
+              </ResourceItem>
+            );
+          }}
+        />
+      </BlockStack>
+    </Card>
+  );
+}
+
 function NewFeaturesPanel({ entries }: { entries: ChangelogEntry[] }) {
   const filterFn = useCallback((e: ChangelogEntry) => e.tags.includes("New") && !e.requires_eng_review, []);
   const { search, setSearch, areaFilter, setAreaFilter, filtered, areaChoices, clearAll } = useSearchFilter(entries, filterFn);
@@ -620,12 +687,13 @@ interface Stats {
   activeDeadlines: number;
 }
 
-type Section = "overview" | "deadlines" | "action" | "features" | "all";
+type Section = "overview" | "deadlines" | "action" | "deprecations" | "features" | "all";
 
 const SECTION_META: Record<Section, { title: string; subtitle: string }> = {
   overview: { title: "Overview", subtitle: "Dashboard summary and recent activity" },
   deadlines: { title: "Deadlines", subtitle: "Upcoming dates and engineering review items" },
   action: { title: "Action Required", subtitle: "Changes requiring team action" },
+  deprecations: { title: "Deprecations", subtitle: "Deprecated features and breaking changes" },
   features: { title: "New Features", subtitle: "New platform capabilities" },
   all: { title: "All Changes", subtitle: "Complete changelog" },
 };
@@ -689,6 +757,7 @@ export default function Dashboard() {
   }
 
   const actionRequiredCount = entries.filter((e) => e.has_action_required).length;
+  const deprecationCount = entries.filter((e) => e.has_breaking_change || e.has_deprecation).length;
 
   const recentCount = useMemo(() => {
     const cutoff = new Date();
@@ -754,6 +823,14 @@ export default function Dashboard() {
             active={section === "action"}
             onClick={() => navigateTo("action")}
           />
+          <NavItem
+            label="Deprecations"
+            icon={AlertDiamondIcon}
+            count={deprecationCount}
+            tone="caution"
+            active={section === "deprecations"}
+            onClick={() => navigateTo("deprecations")}
+          />
 
           <div className="sidebar-section-title">Explore</div>
           <NavItem
@@ -805,6 +882,7 @@ export default function Dashboard() {
               {section === "overview" && <OverviewPanel entries={entries} stats={stats} onNavigate={setSection} />}
               {section === "deadlines" && <DeadlinesPanel entries={entries} />}
               {section === "action" && <ActionRequiredPanel entries={entries} />}
+              {section === "deprecations" && <DeprecationsPanel entries={entries} />}
               {section === "features" && <NewFeaturesPanel entries={entries} />}
               {section === "all" && <AllChangesPanel entries={entries} />}
             </BlockStack>

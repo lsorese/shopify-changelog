@@ -33,16 +33,22 @@ export async function getStats() {
     .from("changelog_entries")
     .select("*", { count: "exact", head: true });
 
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoff30 = thirtyDaysAgo.toISOString().slice(0, 10);
+
   const { count: engReview } = await supabase
     .from("changelog_entries")
     .select("*", { count: "exact", head: true })
-    .eq("requires_eng_review", true);
+    .eq("requires_eng_review", true)
+    .gte("date", cutoff30);
 
   const { count: newFeatures } = await supabase
     .from("changelog_entries")
     .select("*", { count: "exact", head: true })
     .filter("tags", "cs", '["New"]')
-    .eq("requires_eng_review", false);
+    .eq("requires_eng_review", false)
+    .gte("date", cutoff30);
 
   const today = new Date().toISOString().slice(0, 10);
   const { count: activeDeadlines } = await supabase

@@ -48,6 +48,7 @@ async function runDigest() {
     const result = await sendSlackDigest(webhookUrl, dashboardUrl);
     return NextResponse.json({ success: true, ...result });
   } catch (e) {
+    console.error("[slack-digest] sendSlackDigest failed:", e);
     return NextResponse.json(
       { success: false, error: String(e) },
       { status: 500 }

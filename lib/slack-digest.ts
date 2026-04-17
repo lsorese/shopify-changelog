@@ -38,11 +38,16 @@ function areaBreakdown(entries: ChangelogEntry[]): string {
 }
 
 export async function buildSlackDigest(dashboardUrl: string) {
-  // Fetch only entries that haven't been sent to Slack yet
+  // Fetch entries not yet sent to Slack, published within last 72 hours
+  const newCutoff = new Date();
+  newCutoff.setHours(newCutoff.getHours() - 72);
+  const newCutoffDate = newCutoff.toISOString().slice(0, 10);
+
   const { data: newEntries, error } = await supabase
     .from("changelog_entries")
     .select("*")
     .is("slack_notified_at", null)
+    .gte("date", newCutoffDate)
     .order("date", { ascending: false });
 
   if (error) throw error;

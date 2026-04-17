@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Page,
   Card,
-  Tabs,
   Badge,
   Text,
   InlineStack,
@@ -17,7 +16,17 @@ import {
   Banner,
   Spinner,
   Link,
+  Icon,
 } from "@shopify/polaris";
+import {
+  HomeIcon,
+  CalendarIcon,
+  AlertTriangleIcon,
+  StarIcon,
+  ListBulletedIcon,
+  NoteIcon,
+  RefreshIcon,
+} from "@shopify/polaris-icons";
 import type { ChangelogEntry } from "@/lib/db";
 import { AREA_TAGS } from "@/lib/constants";
 import { cleanSummary, fmtDate, fmtDateFull } from "@/lib/format";
@@ -183,9 +192,51 @@ function AreaFilterBar({
   );
 }
 
+// --- Nav item ---
+
+function NavItem({
+  label, icon, count, active, onClick, tone, href,
+}: {
+  label: string;
+  icon: React.FunctionComponent<React.SVGProps<SVGSVGElement>>;
+  count?: number;
+  active?: boolean;
+  onClick?: () => void;
+  tone?: "critical" | "caution" | "success";
+  href?: string;
+}) {
+  const inner = (
+    <>
+      <div className="nav-item__icon">
+        <Icon source={icon} tone={active ? undefined : "subdued"} />
+      </div>
+      <span className="nav-item__label">{label}</span>
+      {count !== undefined && count > 0 && (
+        <span className={`nav-item__count${tone ? ` nav-item__count--${tone}` : ""}`}>{count}</span>
+      )}
+    </>
+  );
+
+  if (href) {
+    return <a href={href} className="nav-item">{inner}</a>;
+  }
+
+  return (
+    <button className={`nav-item${active ? " nav-item--active" : ""}`} onClick={onClick} type="button">
+      {inner}
+    </button>
+  );
+}
+
 // --- Panels ---
 
-function RecentPanel({ entries }: { entries: ChangelogEntry[] }) {
+function OverviewPanel({
+  entries, stats, onNavigate,
+}: {
+  entries: ChangelogEntry[];
+  stats: Stats | null;
+  onNavigate: (section: Section) => void;
+}) {
   const recent = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 7);
@@ -193,22 +244,56 @@ function RecentPanel({ entries }: { entries: ChangelogEntry[] }) {
     return entries.filter((e) => e.date >= cutoffDate);
   }, [entries]);
 
-  return (
-    <Card>
-      <BlockStack gap="400">
-        <Text as="h2" variant="headingMd">{`Recent Changes (${recent.length})`}</Text>
-        <Text as="p" variant="bodySm" tone="subdued">Entries published in the past 7 days.</Text>
+  const statCards: { key: keyof Stats; label: string; tone: "critical" | "caution" | "success" | undefined; section: Section }[] = [
+    { key: "activeDeadlines", label: "Active Deadlines", tone: "critical", section: "deadlines" },
+    { key: "engReview", label: "Eng Review", tone: "caution", section: "deadlines" },
+    { key: "newFeatures", label: "New Features", tone: "success", section: "features" },
+    { key: "total", label: "Total Changes", tone: undefined, section: "all" },
+  ];
 
-        {recent.length === 0 ? (
-          <Banner tone="info">No changes in the past 7 days. Run a scrape to pull new entries.</Banner>
-        ) : (
-          <ResourceList
-            items={recent}
-            renderItem={(e) => <EntryRow entry={e} />}
-          />
-        )}
-      </BlockStack>
-    </Card>
+  return (
+    <BlockStack gap="600">
+      <div
+        role="region"
+        aria-label="Summary statistics"
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "var(--p-space-300)" }}
+      >
+        {statCards.map((s) => (
+          <div
+            key={s.label}
+            role="button"
+            tabIndex={0}
+            aria-label={`${stats?.[s.key] ?? 0} ${s.label} — click to view`}
+            onClick={() => onNavigate(s.section)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(s.section); } }}
+            style={{ cursor: "pointer" }}
+          >
+            <Card>
+              <BlockStack gap="100">
+                <Text as="p" variant="headingLg" tone={s.tone}>{stats?.[s.key] ?? 0}</Text>
+                <Text as="p" variant="bodySm" tone="subdued">{s.label}</Text>
+              </BlockStack>
+            </Card>
+          </div>
+        ))}
+      </div>
+
+      <Card>
+        <BlockStack gap="400">
+          <Text as="h2" variant="headingMd">{`Recent Changes (${recent.length})`}</Text>
+          <Text as="p" variant="bodySm" tone="subdued">Entries published in the past 7 days.</Text>
+
+          {recent.length === 0 ? (
+            <Banner tone="info">No changes in the past 7 days. Run a scrape to pull new entries.</Banner>
+          ) : (
+            <ResourceList
+              items={recent}
+              renderItem={(e) => <EntryRow entry={e} />}
+            />
+          )}
+        </BlockStack>
+      </Card>
+    </BlockStack>
   );
 }
 
@@ -524,7 +609,7 @@ function AllChangesPanel({ entries }: { entries: ChangelogEntry[] }) {
   );
 }
 
-// --- Stats ---
+// --- Types ---
 
 interface Stats {
   total: number;
@@ -533,19 +618,22 @@ interface Stats {
   activeDeadlines: number;
 }
 
-const STAT_CARDS = [
-  { key: "activeDeadlines", label: "Active Deadlines", tone: "critical" as const, tab: 1 },
-  { key: "engReview", label: "Eng Review", tone: "caution" as const, tab: 1 },
-  { key: "newFeatures", label: "New Features", tone: "success" as const, tab: 3 },
-  { key: "total", label: "Total Changes", tone: undefined, tab: 4 },
-] as const;
+type Section = "overview" | "deadlines" | "action" | "features" | "all";
+
+const SECTION_META: Record<Section, { title: string; subtitle: string }> = {
+  overview: { title: "Overview", subtitle: "Dashboard summary and recent activity" },
+  deadlines: { title: "Deadlines", subtitle: "Upcoming dates and engineering review items" },
+  action: { title: "Action Required", subtitle: "Changes requiring team action" },
+  features: { title: "New Features", subtitle: "New platform capabilities" },
+  all: { title: "All Changes", subtitle: "Complete changelog" },
+};
 
 // --- Main ---
 
 export default function Dashboard() {
   const [entries, setEntries] = useState<ChangelogEntry[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [selectedTab, setSelectedTab] = useState(0);
+  const [section, setSection] = useState<Section>("overview");
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
   const [scrapeMsg, setScrapeMsg] = useState("");
@@ -592,81 +680,99 @@ export default function Dashboard() {
   const recentCount = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 7);
-    const cutoffDate = cutoff.toISOString().slice(0, 10);
-    return entries.filter((e) => e.date >= cutoffDate).length;
+    return entries.filter((e) => e.date >= cutoff.toISOString().slice(0, 10)).length;
   }, [entries]);
 
   const deadlineCount = stats ? stats.engReview + stats.activeDeadlines : 0;
-  const tabs = [
-    { id: "recent", content: `Past 7 Days (${recentCount})`, panelID: "recent-panel" },
-    { id: "deadlines", content: `Deadlines (${deadlineCount})`, panelID: "deadlines-panel" },
-    { id: "action", content: `Action Required (${actionRequiredCount})`, panelID: "action-panel" },
-    { id: "features", content: `New Features (${stats?.newFeatures ?? 0})`, panelID: "features-panel" },
-    { id: "all", content: `All Changes (${stats?.total ?? 0})`, panelID: "all-panel" },
-  ];
-
-  if (loading) {
-    return (
-      <Page title="Shopify Changelog">
-        <div role="status" aria-label="Loading dashboard" style={{ display: "flex", justifyContent: "center", padding: "4rem" }}>
-          <Spinner size="large" accessibilityLabel="Loading changelog data" />
-        </div>
-      </Page>
-    );
-  }
+  const meta = SECTION_META[section];
 
   return (
-    <Page
-      title="Shopify Changelog"
-      subtitle={`${stats?.total ?? 0} entries · shopify.dev/changelog`}
-      primaryAction={{
-        content: scraping ? "Scraping..." : "Rescrape",
-        onAction: runScrape,
-        loading: scraping,
-        accessibilityLabel: scraping ? "Scrape in progress" : "Run a new scrape of the Shopify changelog",
-      }}
-      secondaryActions={[
-        { content: "Scrape Logs", url: "/logs", accessibilityLabel: "View scrape history logs" },
-      ]}
-    >
-      <BlockStack gap="400">
-        {scrapeMsg && <Banner tone="info">{scrapeMsg}</Banner>}
-
-        {/* Stats */}
-        <div role="region" aria-label="Summary statistics" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--p-space-300)" }}>
-          {STAT_CARDS.map((s) => (
-            <div
-              key={s.label}
-              role="button"
-              tabIndex={0}
-              aria-label={`${stats?.[s.key] ?? 0} ${s.label} — click to view`}
-              onClick={() => setSelectedTab(s.tab)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedTab(s.tab); } }}
-              style={{ cursor: "pointer" }}
-            >
-              <Card>
-                <BlockStack gap="100">
-                  <Text as="p" variant="headingLg" tone={s.tone}>{stats?.[s.key] ?? 0}</Text>
-                  <Text as="p" variant="bodySm" tone="subdued">{s.label}</Text>
-                </BlockStack>
-              </Card>
-            </div>
-          ))}
+    <div className="app-layout">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <Text as="p" variant="headingMd">Shopify Changelog</Text>
+          <Text as="p" variant="bodySm" tone="subdued">
+            {stats ? `${stats.total} entries tracked` : "Loading..."}
+          </Text>
         </div>
 
-        <Box borderBlockStartWidth="025" borderColor="border" paddingBlockStart="400" />
+        <nav className="sidebar-nav">
+          <div className="sidebar-section-title">Monitor</div>
+          <NavItem
+            label="Overview"
+            icon={HomeIcon}
+            count={recentCount}
+            active={section === "overview"}
+            onClick={() => setSection("overview")}
+          />
+          <NavItem
+            label="Deadlines"
+            icon={CalendarIcon}
+            count={deadlineCount}
+            tone="critical"
+            active={section === "deadlines"}
+            onClick={() => setSection("deadlines")}
+          />
+          <NavItem
+            label="Action Required"
+            icon={AlertTriangleIcon}
+            count={actionRequiredCount}
+            tone="caution"
+            active={section === "action"}
+            onClick={() => setSection("action")}
+          />
 
-        {/* Tabs + Content */}
-        <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
-          <Box paddingBlockStart="400">
-            {selectedTab === 0 && <RecentPanel entries={entries} />}
-            {selectedTab === 1 && <DeadlinesPanel entries={entries} />}
-            {selectedTab === 2 && <ActionRequiredPanel entries={entries} />}
-            {selectedTab === 3 && <NewFeaturesPanel entries={entries} />}
-            {selectedTab === 4 && <AllChangesPanel entries={entries} />}
-          </Box>
-        </Tabs>
-      </BlockStack>
-    </Page>
+          <div className="sidebar-section-title">Explore</div>
+          <NavItem
+            label="New Features"
+            icon={StarIcon}
+            count={stats?.newFeatures}
+            tone="success"
+            active={section === "features"}
+            onClick={() => setSection("features")}
+          />
+          <NavItem
+            label="All Changes"
+            icon={ListBulletedIcon}
+            count={stats?.total}
+            active={section === "all"}
+            onClick={() => setSection("all")}
+          />
+        </nav>
+
+        <div style={{ flex: 1 }} />
+
+        <nav className="sidebar-nav sidebar-footer">
+          <NavItem label="Scrape Logs" icon={NoteIcon} href="/logs" />
+          <NavItem
+            label={scraping ? "Scraping..." : "Rescrape"}
+            icon={RefreshIcon}
+            onClick={runScrape}
+          />
+        </nav>
+      </aside>
+
+      {/* Main content */}
+      <main className="main-content">
+        {loading ? (
+          <div role="status" aria-label="Loading dashboard" style={{ display: "flex", justifyContent: "center", padding: "4rem" }}>
+            <Spinner size="large" accessibilityLabel="Loading changelog data" />
+          </div>
+        ) : (
+          <Page title={meta.title} subtitle={meta.subtitle}>
+            <BlockStack gap="400">
+              {scrapeMsg && <Banner tone="info">{scrapeMsg}</Banner>}
+
+              {section === "overview" && <OverviewPanel entries={entries} stats={stats} onNavigate={setSection} />}
+              {section === "deadlines" && <DeadlinesPanel entries={entries} />}
+              {section === "action" && <ActionRequiredPanel entries={entries} />}
+              {section === "features" && <NewFeaturesPanel entries={entries} />}
+              {section === "all" && <AllChangesPanel entries={entries} />}
+            </BlockStack>
+          </Page>
+        )}
+      </main>
+    </div>
   );
 }

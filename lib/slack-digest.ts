@@ -92,12 +92,6 @@ export async function buildSlackDigest(dashboardUrl: string) {
 
   const blocks: SlackBlock[] = [];
 
-  // Header
-  blocks.push({
-    type: "header",
-    text: { type: "plain_text", text: "Shopify Changelog Digest", emoji: true },
-  });
-
   // Summary line with quick counts
   const summaryParts: string[] = [];
   if (actionRequired.length > 0) summaryParts.push(`:red_circle: ${actionRequired.length} action required`);
@@ -301,21 +295,17 @@ export async function buildSlackDigest(dashboardUrl: string) {
     ],
   });
 
-  return { blocks, summary: `Shopify Changelog: ${allEntries.length} changes in the last 72h` };
+  return { blocks, summary: `${allEntries.length} changes in the last 72h` };
 }
 
 function buildEmptyDigest(dashboardUrl: string) {
   return {
     blocks: [
       {
-        type: "header",
-        text: { type: "plain_text", text: "Shopify Changelog Digest", emoji: true },
-      },
-      {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "No new Shopify changelog entries in the last 72 hours. :relieved:",
+          text: "No new changelog entries in the last 72 hours. :relieved:",
         },
       },
       {
@@ -328,7 +318,7 @@ function buildEmptyDigest(dashboardUrl: string) {
         ],
       },
     ],
-    summary: "Shopify Changelog: No new changes in the last 72h",
+    summary: "No new changes in the last 72h",
   };
 }
 

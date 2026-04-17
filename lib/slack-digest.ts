@@ -49,13 +49,18 @@ export async function buildSlackDigest(dashboardUrl: string) {
 
   const allNew = (newEntries || []) as ChangelogEntry[];
 
-  // Fetch older breaking/deprecation entries that were already notified
-  // (still active reminders worth surfacing as a count)
+  // Fetch older breaking/deprecation entries published within last 30 days
+  // (deadlines have their own section, so exclude action_required-only entries)
+  const olderCutoff = new Date();
+  olderCutoff.setDate(olderCutoff.getDate() - 30);
+  const olderCutoffDate = olderCutoff.toISOString().slice(0, 10);
+
   const { data: olderCritical, error: olderError } = await supabase
     .from("changelog_entries")
     .select("*")
     .not("slack_notified_at", "is", null)
-    .or("has_breaking_change.eq.true,has_deprecation.eq.true,has_action_required.eq.true")
+    .or("has_breaking_change.eq.true,has_deprecation.eq.true")
+    .gte("date", olderCutoffDate)
     .order("date", { ascending: false });
 
   if (olderError) throw olderError;
@@ -298,23 +303,23 @@ export async function buildSlackDigest(dashboardUrl: string) {
     });
   }
 
-  // Section 8: Older breaking/deprecation reminder
+  // Section 8: Older breaking/deprecation reminder (last 30 days)
   if (olderEntries.length > 0) {
     blocks.push({ type: "divider" });
 
-    const olderAction = olderEntries.filter((e) => e.has_action_required);
-    const olderBreaking = olderEntries.filter((e) => !e.has_action_required);
+    const olderBreakingCount = olderEntries.filter((e) => e.has_breaking_change).length;
+    const olderDeprecationCount = olderEntries.length - olderBreakingCount;
 
     const parts: string[] = [];
-    if (olderAction.length > 0) parts.push(`${olderAction.length} action required`);
-    if (olderBreaking.length > 0) parts.push(`${olderBreaking.length} breaking/deprecation`);
+    if (olderBreakingCount > 0) parts.push(`${olderBreakingCount} breaking`);
+    if (olderDeprecationCount > 0) parts.push(`${olderDeprecationCount} deprecation`);
 
     blocks.push({
       type: "context",
       elements: [
         {
           type: "mrkdwn",
-          text: `:pushpin: *${olderEntries.length} older critical change${olderEntries.length === 1 ? "" : "s"}* still active (${parts.join(", ")}) — <${dashboardUrl}|View on Dashboard>`,
+          text: `:pushpin: *${olderEntries.length} breaking/deprecation change${olderEntries.length === 1 ? "" : "s"}* from the last 30 days (${parts.join(", ")}) — <${dashboardUrl}|View on Dashboard>`,
         },
       ],
     });

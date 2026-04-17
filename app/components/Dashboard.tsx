@@ -249,7 +249,7 @@ function OverviewPanel({
 
   const statCards: { key: keyof Stats; label: string; tone: "critical" | "caution" | "success" | undefined; section: Section }[] = [
     { key: "activeDeadlines", label: "Active Deadlines", tone: "critical", section: "deadlines" },
-    { key: "engReview", label: "Eng Review (30d)", tone: "caution", section: "deadlines" },
+    { key: "engReview", label: "Eng Review (30d)", tone: "caution", section: "action" },
     { key: "newFeatures", label: "New Features (30d)", tone: "success", section: "features" },
     { key: "total", label: "Total Changes", tone: undefined, section: "all" },
   ];
@@ -420,10 +420,9 @@ function ActionRequiredPanel({ entries }: { entries: ChangelogEntry[] }) {
           placeholder="Search action items..."
         />
 
-        <Text as="p" variant="bodySm" tone="subdued">{filtered.length} items</Text>
-
         <ResourceList
           items={filtered}
+          totalItemsCount={filtered.length}
           renderItem={(e) => {
             const summary = cleanSummary(e.summary).slice(0, 140);
             return (
@@ -486,10 +485,9 @@ function DeprecationsPanel({ entries }: { entries: ChangelogEntry[] }) {
           placeholder="Search deprecations..."
         />
 
-        <Text as="p" variant="bodySm" tone="subdued">{filtered.length} items</Text>
-
         <ResourceList
           items={filtered}
+          totalItemsCount={filtered.length}
           renderItem={(e) => {
             const summary = cleanSummary(e.summary).slice(0, 140);
             return (
@@ -756,8 +754,24 @@ export default function Dashboard() {
     setScraping(false);
   }
 
-  const actionRequiredCount = entries.filter((e) => e.has_action_required).length;
-  const deprecationCount = entries.filter((e) => e.has_breaking_change || e.has_deprecation).length;
+  const cutoff30d = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
+  const actionRequiredCount = useMemo(
+    () => entries.filter((e) => e.has_action_required && e.date >= cutoff30d).length,
+    [entries, cutoff30d]
+  );
+  const deprecationCount = useMemo(
+    () => entries.filter((e) => (e.has_breaking_change || e.has_deprecation) && e.date >= cutoff30d).length,
+    [entries, cutoff30d]
+  );
+  const newFeaturesCount = useMemo(
+    () => entries.filter((e) => e.tags.includes("New") && !e.requires_eng_review && e.date >= cutoff30d).length,
+    [entries, cutoff30d]
+  );
 
   const recentCount = useMemo(() => {
     const cutoff = new Date();
@@ -832,11 +846,15 @@ export default function Dashboard() {
             onClick={() => navigateTo("deprecations")}
           />
 
+          <div style={{ padding: "4px 12px 0", opacity: 0.5 }}>
+            <Text as="p" variant="bodySm" tone="subdued">Counts from last 30 days</Text>
+          </div>
+
           <div className="sidebar-section-title">Explore</div>
           <NavItem
             label="New Features"
             icon={StarIcon}
-            count={stats?.newFeatures}
+            count={newFeaturesCount}
             tone="success"
             active={section === "features"}
             onClick={() => navigateTo("features")}

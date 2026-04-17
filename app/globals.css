@@ -4,6 +4,12 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Comic Sans mode */
+html.comic-sans,
+html.comic-sans * {
+  font-family: 'Comic Sans MS', 'Comic Sans', cursive !important;
+}
+
 /* Line clamp utilities */
 .line-clamp-1 {
   display: -webkit-box;

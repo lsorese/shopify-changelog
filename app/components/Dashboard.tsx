@@ -27,6 +27,7 @@ import {
   NoteIcon,
   RefreshIcon,
   MenuIcon,
+  TextFontIcon,
 } from "@shopify/polaris-icons";
 import type { ChangelogEntry } from "@/lib/db";
 import { AREA_TAGS } from "@/lib/constants";
@@ -639,6 +640,16 @@ export default function Dashboard() {
   const [scraping, setScraping] = useState(false);
   const [scrapeMsg, setScrapeMsg] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [comicSans, setComicSans] = useState(false);
+
+  useEffect(() => {
+    setComicSans(localStorage.getItem("comicSans") === "1");
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("comic-sans", comicSans);
+    localStorage.setItem("comicSans", comicSans ? "1" : "0");
+  }, [comicSans]);
 
   useEffect(() => {
     fetch("/api/entries")
@@ -770,6 +781,12 @@ export default function Dashboard() {
             label={scraping ? "Scraping..." : "Rescrape"}
             icon={RefreshIcon}
             onClick={runScrape}
+          />
+          <NavItem
+            label={comicSans ? "Comic Sans: ON" : "Comic Sans"}
+            icon={TextFontIcon}
+            active={comicSans}
+            onClick={() => setComicSans((v) => !v)}
           />
         </nav>
       </aside>

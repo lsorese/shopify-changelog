@@ -696,7 +696,7 @@ export default function Dashboard() {
     return entries.filter((e) => e.date >= cutoff.toISOString().slice(0, 10)).length;
   }, [entries]);
 
-  const deadlineCount = stats ? stats.engReview + stats.activeDeadlines : 0;
+  const deadlineCount = stats ? stats.activeDeadlines : 0;
   const meta = SECTION_META[section];
 
   function navigateTo(s: Section) {

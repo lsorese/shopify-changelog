@@ -68,8 +68,8 @@ export default function LogsPage() {
         {logs.map((log) => (
           <Card key={log.id}>
             <BlockStack gap="300">
-              <InlineStack gap="200" align="space-between" blockAlign="center">
-                <InlineStack gap="200" blockAlign="center">
+              <InlineStack gap="200" align="space-between" blockAlign="center" wrap>
+                <InlineStack gap="200" blockAlign="center" wrap>
                   <Text as="span" variant="headingSm">
                     {fmtTimestamp(log.started_at)}
                   </Text>
@@ -77,7 +77,7 @@ export default function LogsPage() {
                     {log.status}
                   </Badge>
                 </InlineStack>
-                <InlineStack gap="200">
+                <InlineStack gap="200" wrap>
                   <Badge>{`${log.total_entries} total`}</Badge>
                   {log.new_entries > 0 && <Badge tone="success">{`${log.new_entries} new`}</Badge>}
                   {log.updated_entries > 0 && <Badge tone="info">{`${log.updated_entries} updated`}</Badge>}

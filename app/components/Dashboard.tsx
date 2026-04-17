@@ -26,6 +26,7 @@ import {
   ListBulletedIcon,
   NoteIcon,
   RefreshIcon,
+  MenuIcon,
 } from "@shopify/polaris-icons";
 import type { ChangelogEntry } from "@/lib/db";
 import { AREA_TAGS } from "@/lib/constants";
@@ -637,6 +638,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
   const [scrapeMsg, setScrapeMsg] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/entries")
@@ -686,10 +688,29 @@ export default function Dashboard() {
   const deadlineCount = stats ? stats.engReview + stats.activeDeadlines : 0;
   const meta = SECTION_META[section];
 
+  function navigateTo(s: Section) {
+    setSection(s);
+    setSidebarOpen(false);
+  }
+
   return (
     <div className="app-layout">
+      {/* Mobile header */}
+      <div className="mobile-header">
+        <button className="mobile-header__burger" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
+          <Icon source={MenuIcon} />
+        </button>
+        <Text as="p" variant="headingMd">{meta.title}</Text>
+      </div>
+
+      {/* Sidebar overlay */}
+      <div
+        className={`sidebar-overlay${sidebarOpen ? " sidebar-overlay--visible" : ""}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar${sidebarOpen ? " sidebar--open" : ""}`}>
         <div className="sidebar-header">
           <Text as="p" variant="headingMd">Shopify Changelog</Text>
           <Text as="p" variant="bodySm" tone="subdued">
@@ -704,7 +725,7 @@ export default function Dashboard() {
             icon={HomeIcon}
             count={recentCount}
             active={section === "overview"}
-            onClick={() => setSection("overview")}
+            onClick={() => navigateTo("overview")}
           />
           <NavItem
             label="Deadlines"
@@ -712,7 +733,7 @@ export default function Dashboard() {
             count={deadlineCount}
             tone="critical"
             active={section === "deadlines"}
-            onClick={() => setSection("deadlines")}
+            onClick={() => navigateTo("deadlines")}
           />
           <NavItem
             label="Action Required"
@@ -720,7 +741,7 @@ export default function Dashboard() {
             count={actionRequiredCount}
             tone="caution"
             active={section === "action"}
-            onClick={() => setSection("action")}
+            onClick={() => navigateTo("action")}
           />
 
           <div className="sidebar-section-title">Explore</div>
@@ -730,14 +751,14 @@ export default function Dashboard() {
             count={stats?.newFeatures}
             tone="success"
             active={section === "features"}
-            onClick={() => setSection("features")}
+            onClick={() => navigateTo("features")}
           />
           <NavItem
             label="All Changes"
             icon={ListBulletedIcon}
             count={stats?.total}
             active={section === "all"}
-            onClick={() => setSection("all")}
+            onClick={() => navigateTo("all")}
           />
         </nav>
 

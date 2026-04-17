@@ -1,6 +1,6 @@
 /* Viewport-based scaling */
 html {
-  font-size: clamp(13px, 1.05vw, 17px);
+  font-size: clamp(14px, 1.05vw, 17px);
   scroll-behavior: smooth;
 }
 
@@ -21,7 +21,7 @@ html {
 /* App shell layout */
 .app-layout {
   display: flex;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -135,10 +135,90 @@ html {
   background: var(--p-color-bg-fill-success-secondary);
 }
 
+/* Mobile header */
+.mobile-header {
+  display: none;
+}
+
+/* Sidebar overlay backdrop */
+.sidebar-overlay {
+  display: none;
+}
+
 /* Main content */
 .main-content {
   flex: 1;
   overflow-y: auto;
   min-width: 0;
   background: var(--p-color-bg);
+}
+
+/* --- Mobile responsive --- */
+@media (max-width: 768px) {
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    gap: var(--p-space-300);
+    padding: var(--p-space-300) var(--p-space-400);
+    background: var(--p-color-bg-surface-secondary);
+    border-bottom: var(--p-border-width-025) solid var(--p-color-border);
+    flex-shrink: 0;
+  }
+
+  .mobile-header__burger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-radius: var(--p-border-radius-200);
+    color: var(--p-color-text);
+  }
+
+  .mobile-header__burger:hover {
+    background: var(--p-color-bg-surface-secondary-hover);
+  }
+
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 100;
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .sidebar--open {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .sidebar-overlay--visible {
+    display: block;
+  }
+
+  .main-content {
+    min-height: 0;
+  }
+
+  /* Stack entry rows vertically on small screens */
+  .entry-row-badges {
+    display: none;
+  }
 }

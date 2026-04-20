@@ -8,6 +8,14 @@ const API_TAGS = new Set([
   "Customer Account API", "Payments Apps API", "Webhook",
 ]);
 
+/** Returns "Tuesday" or "Thursday" — whichever digest day comes next. */
+function nextDigestDay(): string {
+  const day = new Date().getDay(); // 0=Sun … 6=Sat
+  // Digest posts on Tue (2) and Thu (4).
+  // If today is Tue, next is Thu; if Thu or Fri/Sat/Sun/Mon, next is Tue.
+  return day < 4 ? "Thursday" : "Tuesday";
+}
+
 function getAreas(e: ChangelogEntry): string {
   const areas = e.tags.filter((t) => AREA_TAGS_SET.has(t));
   return areas.length > 0 ? areas.join(", ") : "";
@@ -240,7 +248,7 @@ export async function buildSlackDigest(dashboardUrl: string) {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `:large_green_circle: *New Features — Client Opportunities* (${newFeatures.length})`,
+        text: `:large_green_circle: *New Features* (${newFeatures.length})`,
       },
     });
 
@@ -337,7 +345,7 @@ export async function buildSlackDigest(dashboardUrl: string) {
     elements: [
       {
         type: "mrkdwn",
-        text: `<${dashboardUrl}|Open Dashboard> · Next digest tomorrow`,
+        text: `<${dashboardUrl}|Open Dashboard> · Next digest ${nextDigestDay()}`,
       },
     ],
   });
@@ -363,7 +371,7 @@ function buildEmptyDigest(dashboardUrl: string) {
       elements: [
         {
           type: "mrkdwn",
-          text: `<${dashboardUrl}|Open Dashboard> · Next digest tomorrow`,
+          text: `<${dashboardUrl}|Open Dashboard> · Next digest ${nextDigestDay()}`,
         },
       ],
     },
